@@ -436,10 +436,10 @@ h3 {
 }
 
 .portal-grid {
-  width: min(1180px, calc(100vw - 36px));
+  width: min(900px, calc(100vw - 36px));
   margin: 34px auto 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   position: relative;
   z-index: 4;
@@ -1005,9 +1005,9 @@ pre {
     left: 20px;
     right: auto;
     bottom: 18px;
-    width: min(350px, calc(100vw - 40px));
+    width: min(260px, calc(100vw - 40px));
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 

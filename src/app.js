@@ -3,84 +3,52 @@ const STORAGE_KEY = "grimorio-corvo-state-v1";
 const defaultTopics = [
   { id: crypto.randomUUID(), title: "Upgrade de precon por ate R$50", series: "Commander barato", status: "idea" },
   { id: crypto.randomUUID(), title: "Cartas que parecem ruins ate ganharem a mesa", series: "Carta esquecida", status: "idea" },
-  { id: crypto.randomUUID(), title: "Deck tech de comandante subestimado", series: "Deck tech", status: "script" },
-  { id: crypto.randomUUID(), title: "Lore de um planeswalker em 5 minutos", series: "Lore", status: "record" },
-  { id: crypto.randomUUID(), title: "Top 10 remocoes pretas para Commander", series: "Top 10", status: "done" }
+  { id: crypto.randomUUID(), title: "Analisar um deck de comandante subestimado", series: "Decks", status: "research" },
+  { id: crypto.randomUUID(), title: "Top 10 remocoes pretas para Commander", series: "Cartas", status: "done" }
 ];
-
-const loreNotes = {
-  "liliana vess": {
-    pitch: "Necromante ambiciosa, marcada por pactos demoníacos e por escolhas que quase sempre cobram um preço pessoal.",
-    beats: ["Origem em Dominária", "Pactos com quatro demônios", "Veil, Gideon e Guerra da Centelha", "Culpa, sobrevivência e reinvenção"],
-    hook: "Liliana vendeu a alma para escapar da morte, mas cada vitória dela deixou uma dívida maior."
-  },
-  "nicol bolas": {
-    pitch: "Dragão ancião, manipulador multiversal e uma das maiores ameaças já vistas em Magic.",
-    beats: ["Dragões anciões", "Planos dentro de planos", "Amonkhet e Ravnica", "Queda e prisão no Meditation Realm"],
-    hook: "Bolas não queria vencer uma guerra; queria transformar o Multiverso em tabuleiro."
-  },
-  "chandra nalaar": {
-    pitch: "Piromante impulsiva de Kaladesh, símbolo de liberdade, raiva e afeto sem filtro.",
-    beats: ["Kaladesh e repressão ao éter", "Primeira centelha", "Gatewatch", "Conflitos com autoridade e família"],
-    hook: "Chandra não resolve problemas com fogo. Ela revela quais problemas já estavam inflamáveis."
-  },
-  "jace beleren": {
-    pitch: "Telepata brilhante, frequentemente dividido entre controle, culpa e perda de identidade.",
-    beats: ["Vryn", "Manipulação mental", "Guildpact vivo", "Ixalan e reconstrução pessoal"],
-    hook: "O maior poder do Jace também é o que mais apaga quem ele é."
-  },
-  "teferi": {
-    pitch: "Mago temporal de Zhalfir que carrega uma das maiores culpas de Dominária.",
-    beats: ["Academia Tolariana", "Zhalfir fora do tempo", "Perda da centelha", "Retorno como mentor"],
-    hook: "Teferi salvou um povo tirando-o do mundo. Depois passou séculos tentando trazê-lo de volta."
-  },
-  "elesh norn": {
-    pitch: "Praetora branca de Nova Phyrexia, obcecada por unidade, fé e submissão perfeita.",
-    beats: ["A Máquina Ortodoxa", "Domínio entre os praetores", "Compleation", "Marcha das Máquinas"],
-    hook: "Elesh Norn chama de paz aquilo que o resto do Multiverso chama de fim."
-  },
-  "urza": {
-    pitch: "Artífice genial de Dominária, herói por necessidade e catástrofe ambulante por consequência.",
-    beats: ["Guerra dos Irmãos", "Mishra", "Legado", "Phyrexia e sacrifícios extremos"],
-    hook: "Urza venceu guerras impossíveis, mas quase nunca saiu delas como uma pessoa melhor."
-  },
-  "yawgmoth": {
-    pitch: "Médico, tirano e figura central na transformação de Phyrexia em horror tecnológico e religioso.",
-    beats: ["Thran", "Exílio", "Ascensão em Phyrexia", "Corrupção biológica e ideológica"],
-    hook: "Yawgmoth não criou só monstros. Ele criou uma ideia capaz de infectar mundos."
-  }
-};
-
-const state = loadState();
 
 const views = document.querySelectorAll(".view");
 const navItems = document.querySelectorAll("[data-view-target]");
 const saveStatus = document.querySelector("#saveStatus");
+const state = loadState();
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {
-    return { topics: defaultTopics, scriptsGenerated: 0 };
+    return { topics: defaultTopics };
   }
 
   try {
     const parsed = JSON.parse(saved);
     return {
-      topics: Array.isArray(parsed.topics) ? parsed.topics : defaultTopics,
-      scriptsGenerated: Number(parsed.scriptsGenerated || 0)
+      topics: normalizeTopics(Array.isArray(parsed.topics) ? parsed.topics : defaultTopics)
     };
   } catch {
-    return { topics: defaultTopics, scriptsGenerated: 0 };
+    return { topics: defaultTopics };
   }
+}
+
+function normalizeTopics(topics) {
+  return topics
+    .filter((topic) => topic.series !== "Lore")
+    .map((topic) => ({
+      ...topic,
+      status: topic.status === "script" ? "research" : topic.status
+    }));
 }
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  saveStatus.textContent = "Salvo";
+  setTransientStatus("Salvo");
+  renderMetrics();
+}
+
+function setTransientStatus(text) {
+  if (!saveStatus) return;
+  saveStatus.textContent = text;
   window.setTimeout(() => {
     saveStatus.textContent = "Pronto";
   }, 1200);
-  renderMetrics();
 }
 
 function setView(viewId) {
@@ -114,12 +82,11 @@ document.querySelectorAll("[data-jump]").forEach((button) => {
 function renderMetrics() {
   document.querySelector("#metricThemes").textContent = state.topics.filter((topic) => topic.status !== "done").length;
   document.querySelector("#metricDone").textContent = state.topics.filter((topic) => topic.status === "done").length;
-  document.querySelector("#metricScripts").textContent = state.scriptsGenerated;
 }
 
 const statusLabels = {
   idea: "Ideia",
-  script: "Roteiro",
+  research: "Pesquisa",
   record: "Gravação",
   done: "Concluído"
 };
@@ -141,11 +108,11 @@ function renderTopics() {
         <article class="topic-item">
           <div class="topic-main">
             <div class="topic-title">${escapeHtml(topic.title)}</div>
-            <div class="topic-meta">${escapeHtml(topic.series)} · ${statusLabels[topic.status]}</div>
+            <div class="topic-meta">${escapeHtml(topic.series)} · ${statusLabels[topic.status] || "Ideia"}</div>
           </div>
           <div class="topic-actions">
             ${renderStatusButton(topic, "idea")}
-            ${renderStatusButton(topic, "script")}
+            ${renderStatusButton(topic, "research")}
             ${renderStatusButton(topic, "record")}
             ${renderStatusButton(topic, "done")}
             <button class="small-button" type="button" data-topic-delete="${topic.id}">Remover</button>
@@ -206,164 +173,10 @@ document.querySelector("#topicForm").addEventListener("submit", (event) => {
 
 function detectSeries(title) {
   const lower = title.toLowerCase();
-  if (lower.includes("lore")) return "Lore";
-  if (lower.includes("top")) return "Top 10";
-  if (lower.includes("deck")) return "Deck tech";
-  if (lower.includes("precon") || lower.includes("upgrade")) return "Commander barato";
-  if (lower.includes("spoiler")) return "Spoilers";
-  return "Ideias soltas";
-}
-
-document.querySelector("#scriptForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const data = {
-    theme: document.querySelector("#scriptTheme").value.trim(),
-    format: document.querySelector("#scriptFormat").value,
-    audience: document.querySelector("#scriptAudience").value,
-    tone: document.querySelector("#scriptTone").value,
-    length: document.querySelector("#scriptLength").value,
-    notes: document.querySelector("#scriptNotes").value.trim()
-  };
-
-  const script = generateScript(data);
-  document.querySelector("#scriptOutput").textContent = script;
-  state.scriptsGenerated += 1;
-  persist();
-});
-
-document.querySelector("#copyScript").addEventListener("click", async () => {
-  const output = document.querySelector("#scriptOutput").textContent;
-  try {
-    if (!navigator.clipboard) throw new Error("Clipboard indisponível");
-    await navigator.clipboard.writeText(output);
-  } catch {
-    fallbackCopy(output);
-  }
-  setTransientStatus("Copiado");
-});
-
-function fallbackCopy(text) {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
-}
-
-function setTransientStatus(text) {
-  saveStatus.textContent = text;
-  window.setTimeout(() => {
-    saveStatus.textContent = "Pronto";
-  }, 1200);
-}
-
-function generateScript(data) {
-  const notes = data.notes
-    ? data.notes.split(/\n+/).map((line) => line.trim()).filter(Boolean)
-    : ["ponto forte principal", "risco ou fraqueza", "exemplo de jogada"];
-  const titleCore = data.theme.replace(/\.$/, "");
-
-  const titles = [
-    `Essa tech muda ${titleCore}`,
-    `${titleCore}: vale mesmo a pena?`,
-    `O grimório abriu: ${titleCore}`,
-    `${titleCore} sem enrolação`
-  ];
-
-  const hook = data.tone.includes("Polêmico")
-    ? `Talvez a mesa esteja avaliando ${titleCore} do jeito errado.`
-    : data.tone.includes("Cinemático")
-      ? `Toda mesa tem uma carta que parece sussurrar antes do estrago começar. Hoje é ${titleCore}.`
-      : `Hoje eu vou te mostrar ${titleCore} sem virar palestra de duas horas.`;
-
-  return `# ${titles[0]}
-
-Formato: ${data.format}
-Público: ${data.audience}
-Tom: ${data.tone}
-Duração: ${data.length}
-
-## Títulos alternativos
-1. ${titles[1]}
-2. ${titles[2]}
-3. ${titles[3]}
-
-## Abertura
-${hook}
-
-## Estrutura
-0:00 - Gancho
-Apresente a promessa do vídeo em uma frase e mostre a carta, deck ou personagem na tela.
-
-0:20 - Contexto
-Explique onde isso entra no Commander, no lore ou no metagame. Use uma comparação simples.
-
-1:10 - Núcleo do vídeo
-${notes.map((note, index) => `${index + 1}. ${note}`).join("\n")}
-
-## Momento Corvo
-Inclua uma opinião clara do canal: o que muita gente ignora, compra errado ou joga no piloto automático.
-
-## Fechamento
-Resuma a recomendação final em uma frase. Convide a audiência a comentar uma carta, comandante ou tema para o próximo grimório.
-
-## Thumbnail
-Texto curto: "${compactTitle(titleCore)}"
-Visual: carta/personagem grande, fundo escuro, contraste em dourado ou verde, expressão de ameaça ou descoberta.
-
-## Descrição
-Hoje no Grimório do Corvo: ${titleCore}. Vamos olhar contexto, pontos fortes, riscos e onde isso realmente brilha em Magic: The Gathering.
-
-#MTG #MagicTheGathering #Commander #EDH #GrimorioDoCorvo`;
-}
-
-function compactTitle(title) {
-  const clean = title.split(" ").slice(0, 5).join(" ");
-  return clean.length > 28 ? `${clean.slice(0, 25)}...` : clean;
-}
-
-document.querySelector("#loreForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const query = document.querySelector("#loreQuery").value.trim();
-  const angle = document.querySelector("#loreAngle").value;
-  if (!query) return;
-
-  renderLore(query, angle);
-});
-
-function renderLore(query, angle) {
-  const output = document.querySelector("#loreOutput");
-  const key = query.toLowerCase();
-  const note = loreNotes[key] || buildGenericLore(query);
-  const encoded = encodeURIComponent(query);
-
-  output.innerHTML = `
-    <h3>${escapeHtml(query)}</h3>
-    <p><strong>Enfoque:</strong> ${escapeHtml(angle)}</p>
-    <p>${escapeHtml(note.pitch)}</p>
-    <h3>Gancho</h3>
-    <p>${escapeHtml(note.hook)}</p>
-    <h3>Blocos</h3>
-    <ul>${note.beats.map((beat) => `<li>${escapeHtml(beat)}</li>`).join("")}</ul>
-    <h3>Fontes rápidas</h3>
-    <div class="link-row">
-      <a href="https://mtg.fandom.com/wiki/Special:Search?query=${encoded}" target="_blank" rel="noreferrer">MTG Wiki</a>
-      <a href="https://magic.wizards.com/en/search?search=${encoded}" target="_blank" rel="noreferrer">Magic Story</a>
-      <a href="https://scryfall.com/search?q=${encoded}" target="_blank" rel="noreferrer">Cartas</a>
-    </div>
-  `;
-}
-
-function buildGenericLore(query) {
-  return {
-    pitch: `Dossiê inicial para pesquisar ${query} e transformar a lore em vídeo.`,
-    hook: `${query} pode virar um vídeo forte se a abertura focar no conflito central antes da linha do tempo.`,
-    beats: ["Origem", "Primeiro conflito importante", "Carta ou cena mais reconhecível", "Virada dramática", "Estado atual na história"]
-  };
+  if (lower.includes("top")) return "Cartas";
+  if (lower.includes("carta") || lower.includes("spoiler")) return "Cartas";
+  if (lower.includes("deck") || lower.includes("precon") || lower.includes("upgrade")) return "Decks";
+  return "Temas";
 }
 
 document.querySelector("#cardForm").addEventListener("submit", async (event) => {
@@ -613,4 +426,3 @@ function initVisualEffects() {
 renderMetrics();
 renderTopics();
 initVisualEffects();
-

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Central criativa do Grimório do Corvo para roteiros, lore, cartas e decks de Magic: The Gathering." />
+    <meta name="description" content="Central criativa do Grimório do Corvo para temas, cartas e decks de Magic: The Gathering." />
     <title>Grimório do Corvo | Central Criativa MTG</title>
     <link rel="icon" href="assets/corvo-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="src/styles.css" />
@@ -24,9 +24,7 @@
 
       <nav class="spell-tabs" aria-label="Capítulos">
         <button class="nav-item active" type="button" data-view-target="dashboard">Início</button>
-        <button class="nav-item" type="button" data-view-target="roteiro">Roteiros</button>
         <button class="nav-item" type="button" data-view-target="temas">Temas</button>
-        <button class="nav-item" type="button" data-view-target="lore">Lore</button>
         <button class="nav-item" type="button" data-view-target="cartas">Cartas</button>
         <button class="nav-item" type="button" data-view-target="decks">Decks</button>
       </nav>
@@ -42,9 +40,9 @@
           <div class="hero-copy reveal">
             <p class="eyebrow">Central criativa MTG</p>
             <h1 id="dashboard-title">Grimório do Corvo</h1>
-            <p class="hero-line">Roteiros, lore, cartas e decks reunidos num só lugar para transformar uma ideia solta em vídeo pronto.</p>
+            <p class="hero-line">Temas, cartas e decks reunidos num só lugar para transformar uma ideia solta em vídeo pronto.</p>
             <div class="hero-actions">
-              <button class="primary-action" type="button" data-jump="roteiro">Abrir roteiro</button>
+              <button class="primary-action" type="button" data-jump="temas">Organizar temas</button>
               <button class="ghost-action" type="button" data-jump="cartas">Buscar carta</button>
             </div>
           </div>
@@ -62,25 +60,13 @@
               <strong id="metricDone">0</strong>
               <span>selados</span>
             </div>
-            <div>
-              <strong id="metricScripts">0</strong>
-              <span>roteiros</span>
-            </div>
           </div>
         </div>
 
         <div class="portal-grid" aria-label="Ferramentas">
-          <button class="tool-tile reveal" type="button" data-jump="roteiro">
-            <span>Roteiros</span>
-            <strong>gancho, estrutura, descrição</strong>
-          </button>
           <button class="tool-tile reveal" type="button" data-jump="temas">
             <span>Temas</span>
             <strong>fila, séries, progresso</strong>
-          </button>
-          <button class="tool-tile reveal" type="button" data-jump="lore">
-            <span>Lore</span>
-            <strong>personagens e planos</strong>
           </button>
           <button class="tool-tile reveal" type="button" data-jump="cartas">
             <span>Cartas</span>
@@ -90,82 +76,6 @@
             <span>Decks</span>
             <strong>curva, cores, funções</strong>
           </button>
-        </div>
-      </section>
-
-      <section class="view chapter-view" id="roteiro" aria-labelledby="roteiro-title">
-        <div class="chapter-hero">
-          <div>
-            <p class="eyebrow">Ritual de gravação</p>
-            <h2 id="roteiro-title">Roteiro automático</h2>
-          </div>
-          <button class="ghost-action" type="button" id="copyScript">Copiar roteiro</button>
-        </div>
-
-        <div class="spell-layout">
-          <form class="spell-form reveal" id="scriptForm">
-            <label>
-              Tema
-              <input id="scriptTheme" name="theme" type="text" placeholder="Upgrade barato do precon de vampiros" required />
-            </label>
-
-            <div class="form-row">
-              <label>
-                Formato
-                <select id="scriptFormat" name="format">
-                  <option>Deck tech</option>
-                  <option>Shorts</option>
-                  <option>Lore</option>
-                  <option>Top 10</option>
-                  <option>Análise de spoiler</option>
-                  <option>Review de produto</option>
-                </select>
-              </label>
-              <label>
-                Público
-                <select id="scriptAudience" name="audience">
-                  <option>Commander casual</option>
-                  <option>Iniciante</option>
-                  <option>Mesas fortes</option>
-                  <option>Colecionadores</option>
-                  <option>Jogadores competitivos</option>
-                </select>
-              </label>
-            </div>
-
-            <div class="form-row">
-              <label>
-                Tom
-                <select id="scriptTone" name="tone">
-                  <option>Misterioso e direto</option>
-                  <option>Didático</option>
-                  <option>Polêmico</option>
-                  <option>Engraçado</option>
-                  <option>Cinemático</option>
-                </select>
-              </label>
-              <label>
-                Duração
-                <select id="scriptLength" name="length">
-                  <option>30-60 segundos</option>
-                  <option>4-6 minutos</option>
-                  <option>8-12 minutos</option>
-                  <option>15+ minutos</option>
-                </select>
-              </label>
-            </div>
-
-            <label>
-              Cartas ou pontos obrigatórios
-              <textarea id="scriptNotes" name="notes" rows="5" placeholder="Uma carta por linha, combos, preço, alerta de regra..."></textarea>
-            </label>
-
-            <button class="primary-action full" type="submit">Gerar roteiro</button>
-          </form>
-
-          <article class="manuscript reveal">
-            <pre id="scriptOutput" tabindex="0">O próximo roteiro aparece aqui.</pre>
-          </article>
         </div>
       </section>
 
@@ -184,45 +94,12 @@
         <div class="filter-bar reveal" role="group" aria-label="Filtrar temas">
           <button class="filter active" type="button" data-topic-filter="all">Todos</button>
           <button class="filter" type="button" data-topic-filter="idea">Ideias</button>
-          <button class="filter" type="button" data-topic-filter="script">Roteiro</button>
+          <button class="filter" type="button" data-topic-filter="research">Pesquisa</button>
           <button class="filter" type="button" data-topic-filter="record">Gravação</button>
           <button class="filter" type="button" data-topic-filter="done">Concluído</button>
         </div>
 
         <div class="topic-list reveal" id="topicList" aria-live="polite"></div>
-      </section>
-
-      <section class="view chapter-view" id="lore" aria-labelledby="lore-title">
-        <div class="chapter-hero">
-          <div>
-            <p class="eyebrow">Arquivo multiversal</p>
-            <h2 id="lore-title">Lore de personagem</h2>
-          </div>
-        </div>
-
-        <div class="spell-layout">
-          <form class="spell-form reveal" id="loreForm">
-            <label>
-              Personagem, plano ou facção
-              <input id="loreQuery" type="text" placeholder="Liliana Vess, Nicol Bolas, Phyrexia" required />
-            </label>
-            <label>
-              Enfoque
-              <select id="loreAngle">
-                <option>Resumo para vídeo</option>
-                <option>Origem e evolução</option>
-                <option>Vilão ou herói?</option>
-                <option>Conexões com cartas</option>
-                <option>Linha do tempo</option>
-              </select>
-            </label>
-            <button class="primary-action full" type="submit">Montar dossiê</button>
-          </form>
-
-          <article class="manuscript lore-output reveal" id="loreOutput">
-            <p>O dossiê aparece aqui.</p>
-          </article>
-        </div>
       </section>
 
       <section class="view chapter-view" id="cartas" aria-labelledby="cartas-title">

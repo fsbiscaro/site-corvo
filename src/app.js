@@ -86,7 +86,21 @@ function persist() {
 function setView(viewId) {
   views.forEach((view) => view.classList.toggle("active", view.id === viewId));
   navItems.forEach((item) => item.classList.toggle("active", item.dataset.viewTarget === viewId));
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  document.body.dataset.view = viewId;
+  window.requestAnimationFrame(() => restartReveals(viewId));
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
+}
+
+function restartReveals(viewId) {
+  const activeView = document.getElementById(viewId);
+  if (!activeView) return;
+
+  activeView.querySelectorAll(".reveal").forEach((element) => {
+    element.style.animation = "none";
+    element.offsetHeight;
+    element.style.animation = "";
+  });
 }
 
 navItems.forEach((item) => {
@@ -219,12 +233,33 @@ document.querySelector("#scriptForm").addEventListener("submit", (event) => {
 
 document.querySelector("#copyScript").addEventListener("click", async () => {
   const output = document.querySelector("#scriptOutput").textContent;
-  await navigator.clipboard.writeText(output);
-  saveStatus.textContent = "Copiado";
+  try {
+    if (!navigator.clipboard) throw new Error("Clipboard indisponível");
+    await navigator.clipboard.writeText(output);
+  } catch {
+    fallbackCopy(output);
+  }
+  setTransientStatus("Copiado");
+});
+
+function fallbackCopy(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function setTransientStatus(text) {
+  saveStatus.textContent = text;
   window.setTimeout(() => {
     saveStatus.textContent = "Pronto";
   }, 1200);
-});
+}
 
 function generateScript(data) {
   const notes = data.notes
@@ -558,5 +593,24 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function initVisualEffects() {
+  const root = document.querySelector("[data-parallax-root]");
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!root || prefersReducedMotion) return;
+
+  window.addEventListener("pointermove", (event) => {
+    const x = (event.clientX / window.innerWidth - 0.5) * 2;
+    const y = (event.clientY / window.innerHeight - 0.5) * 2;
+
+    root.querySelectorAll("[data-parallax]").forEach((element) => {
+      const strength = Number(element.dataset.parallax || 8);
+      element.style.setProperty("--px", `${x * strength}px`);
+      element.style.setProperty("--py", `${y * strength}px`);
+    });
+  }, { passive: true });
+}
+
 renderMetrics();
 renderTopics();
+initVisualEffects();
+

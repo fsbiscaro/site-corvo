@@ -186,12 +186,32 @@ document.querySelector("#cardForm").addEventListener("submit", async (event) => 
   await searchCard(name);
 });
 
+document.querySelector("#cardResult").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-download-image]");
+  if (!button) return;
+
+  button.disabled = true;
+  const originalText = button.textContent;
+  button.textContent = "Baixando...";
+
+  try {
+    await downloadCardImage(button.dataset.downloadImage, button.dataset.downloadName);
+    setTransientStatus("Download iniciado");
+  } catch {
+    triggerDirectDownload(button.dataset.downloadImage, button.dataset.downloadName);
+    setTransientStatus("Download iniciado");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+});
+
 async function searchCard(name) {
   const result = document.querySelector("#cardResult");
   result.innerHTML = '<div class="empty-state">Buscando...</div>';
 
   try {
-    const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+    const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error("Carta não encontrada.");
     const card = await response.json();
     renderCard(card);
@@ -201,16 +221,28 @@ async function searchCard(name) {
 }
 
 function renderCard(card) {
-  const image = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || "";
+  const displayImage = getCardImage(card, "large") || getCardImage(card, "normal") || "";
   const oracle = card.oracle_text || card.card_faces?.map((face) => `${face.name}\n${face.oracle_text || ""}`).join("\n\n") || "Sem texto Oracle.";
   const legality = card.legalities?.commander || "unknown";
   const ligaSearch = `https://www.ligamagic.com.br/?view=cards/search&card=${encodeURIComponent(card.name)}`;
+  const downloads = getCardDownloads(card);
 
   document.querySelector("#cardResult").innerHTML = `
     <div class="card-display">
-      ${image ? `<img class="card-image" src="${image}" alt="${escapeHtml(card.name)}" />` : ""}
+      ${displayImage ? `<img class="card-image" src="${displayImage}" alt="${escapeHtml(card.name)}" />` : ""}
       <article class="card-info">
         <h3>${escapeHtml(card.name)}</h3>
+        <div class="download-panel">
+          <strong>Imagem para vídeo</strong>
+          <span>PNG em alta resolução. O arquivo vai para a pasta padrão de downloads do navegador.</span>
+          <div class="download-actions">
+            ${downloads.map((item) => `
+              <button class="download-card-button" type="button" data-download-image="${escapeHtml(item.url)}" data-download-name="${escapeHtml(item.fileName)}">
+                ${escapeHtml(item.label)}
+              </button>
+            `).join("")}
+          </div>
+        </div>
         <dl>
           <dt>Custo</dt>
           <dd>${escapeHtml(card.mana_cost || "Sem custo")}</dd>
@@ -231,6 +263,57 @@ function renderCard(card) {
       </article>
     </div>
   `;
+}
+
+function getCardImage(card, size) {
+  return card.image_uris?.[size] || card.card_faces?.[0]?.image_uris?.[size] || "";
+}
+
+function getCardDownloads(card) {
+  if (card.image_uris?.png) {
+    return [{
+      label: "Baixar PNG alta",
+      url: card.image_uris.png,
+      fileName: `${sanitizeFileName(card.name)}.png`
+    }];
+  }
+
+  return (card.card_faces || [])
+    .filter((face) => face.image_uris?.png)
+    .map((face, index) => ({
+      label: index === 0 ? "Baixar frente PNG" : "Baixar verso PNG",
+      url: face.image_uris.png,
+      fileName: `${sanitizeFileName(card.name)}-${index + 1}-${sanitizeFileName(face.name)}.png`
+    }));
+}
+
+async function downloadCardImage(url, fileName) {
+  const response = await fetch(url, { mode: "cors" });
+  if (!response.ok) throw new Error("Não consegui baixar a imagem.");
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  triggerDirectDownload(objectUrl, fileName);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+function triggerDirectDownload(url, fileName) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.rel = "noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function sanitizeFileName(value) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
 }
 
 document.querySelector("#loadSampleDeck").addEventListener("click", () => {
@@ -313,7 +396,7 @@ async function fetchCardsByName(names) {
   for (const chunk of chunks) {
     const response = await fetch("https://api.scryfall.com/cards/collection", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         identifiers: chunk.map((name) => ({ name }))
       })

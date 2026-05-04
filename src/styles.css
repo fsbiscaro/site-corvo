@@ -715,6 +715,56 @@ pre {
   color: rgba(255, 248, 232, 0.9);
 }
 
+
+.download-panel {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid rgba(245, 212, 119, 0.28);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(245, 212, 119, 0.14), rgba(126, 38, 48, 0.12));
+}
+
+.download-panel strong {
+  color: var(--moon);
+  font-family: "Palatino Linotype", Georgia, serif;
+  font-size: 1.22rem;
+}
+
+.download-panel span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.download-card-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 238, 178, 0.58);
+  border-radius: 999px;
+  color: #1b0f0b;
+  background: linear-gradient(135deg, #fff0aa, var(--gold) 46%, #cc7b28);
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.download-card-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(245, 212, 119, 0.24);
+}
+
+.download-card-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+}
 .link-row {
   margin-top: 18px;
 }

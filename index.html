@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Central de produção do canal Grimório do Corvo para roteiros, cartas, lore e análise de decks de Magic: The Gathering." />
+    <title>Grimório do Corvo | Central MTG</title>
+    <link rel="icon" href="assets/corvo-mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navegação principal">
+        <a class="brand" href="#" aria-label="Grimório do Corvo">
+          <img src="assets/corvo-mark.svg" alt="" class="brand-mark" />
+          <span>
+            <strong>Grimório do Corvo</strong>
+            <small>Central MTG</small>
+          </span>
+        </a>
+
+        <nav class="nav-list" aria-label="Ferramentas">
+          <button class="nav-item active" type="button" data-view-target="dashboard">Painel</button>
+          <button class="nav-item" type="button" data-view-target="roteiro">Roteiros</button>
+          <button class="nav-item" type="button" data-view-target="temas">Temas</button>
+          <button class="nav-item" type="button" data-view-target="lore">Lore</button>
+          <button class="nav-item" type="button" data-view-target="cartas">Cartas</button>
+          <button class="nav-item" type="button" data-view-target="decks">Decks</button>
+        </nav>
+
+        <a class="channel-link" href="https://www.youtube.com/@GrimoriodoCorvo" target="_blank" rel="noreferrer">
+          Abrir canal
+        </a>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Produção de conteúdo</p>
+            <h1>Ferramentas do canal</h1>
+          </div>
+          <div class="status-pill" aria-live="polite">
+            <span class="status-dot"></span>
+            <span id="saveStatus">Pronto</span>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard" aria-labelledby="dashboard-title">
+          <div class="dashboard-grid">
+            <article class="panel intro-panel">
+              <div>
+                <p class="eyebrow">Grimório operacional</p>
+                <h2 id="dashboard-title">Do tema ao vídeo publicado</h2>
+              </div>
+              <div class="quick-actions">
+                <button class="primary-action" type="button" data-jump="roteiro">Novo roteiro</button>
+                <button class="ghost-action" type="button" data-jump="cartas">Buscar carta</button>
+              </div>
+            </article>
+
+            <article class="metric-card">
+              <span class="metric-value" id="metricThemes">0</span>
+              <span class="metric-label">temas ativos</span>
+            </article>
+            <article class="metric-card">
+              <span class="metric-value" id="metricDone">0</span>
+              <span class="metric-label">concluídos</span>
+            </article>
+            <article class="metric-card">
+              <span class="metric-value" id="metricScripts">0</span>
+              <span class="metric-label">roteiros gerados</span>
+            </article>
+          </div>
+
+          <div class="tool-grid">
+            <button class="tool-tile" type="button" data-jump="roteiro">
+              <span>Roteiros</span>
+              <strong>Estrutura, títulos e descrição</strong>
+            </button>
+            <button class="tool-tile" type="button" data-jump="temas">
+              <span>Temas</span>
+              <strong>Fila editorial e séries</strong>
+            </button>
+            <button class="tool-tile" type="button" data-jump="lore">
+              <span>Lore</span>
+              <strong>Dossiê rápido de personagem</strong>
+            </button>
+            <button class="tool-tile" type="button" data-jump="cartas">
+              <span>Cartas</span>
+              <strong>Busca direta por nome</strong>
+            </button>
+            <button class="tool-tile" type="button" data-jump="decks">
+              <span>Decks</span>
+              <strong>Curva, cores e categorias</strong>
+            </button>
+          </div>
+        </section>
+
+        <section class="view" id="roteiro" aria-labelledby="roteiro-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Gerador</p>
+              <h2 id="roteiro-title">Roteiro automático</h2>
+            </div>
+            <button class="ghost-action" type="button" id="copyScript">Copiar</button>
+          </div>
+
+          <div class="split-layout">
+            <form class="panel form-panel" id="scriptForm">
+              <label>
+                Tema
+                <input id="scriptTheme" name="theme" type="text" placeholder="Ex.: upgrade barato do precon de vampiros" required />
+              </label>
+
+              <div class="form-row">
+                <label>
+                  Formato
+                  <select id="scriptFormat" name="format">
+                    <option>Deck tech</option>
+                    <option>Shorts</option>
+                    <option>Lore</option>
+                    <option>Top 10</option>
+                    <option>Análise de spoiler</option>
+                    <option>Review de produto</option>
+                  </select>
+                </label>
+                <label>
+                  Público
+                  <select id="scriptAudience" name="audience">
+                    <option>Commander casual</option>
+                    <option>Iniciante</option>
+                    <option>Mesas fortes</option>
+                    <option>Colecionadores</option>
+                    <option>Jogadores competitivos</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>
+                  Tom
+                  <select id="scriptTone" name="tone">
+                    <option>Misterioso e direto</option>
+                    <option>Didático</option>
+                    <option>Polêmico</option>
+                    <option>Engraçado</option>
+                    <option>Cinemático</option>
+                  </select>
+                </label>
+                <label>
+                  Duração
+                  <select id="scriptLength" name="length">
+                    <option>30-60 segundos</option>
+                    <option>4-6 minutos</option>
+                    <option>8-12 minutos</option>
+                    <option>15+ minutos</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                Cartas ou pontos obrigatórios
+                <textarea id="scriptNotes" name="notes" rows="5" placeholder="Uma carta por linha, combos, piadas internas, preço, alerta de regra..."></textarea>
+              </label>
+
+              <button class="primary-action full" type="submit">Gerar roteiro</button>
+            </form>
+
+            <article class="panel output-panel">
+              <pre id="scriptOutput" tabindex="0">Preencha o formulário para montar o primeiro roteiro.</pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="temas" aria-labelledby="temas-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Checklist</p>
+              <h2 id="temas-title">Temas e séries</h2>
+            </div>
+            <form class="inline-form" id="topicForm">
+              <input id="newTopic" type="text" placeholder="Novo tema" aria-label="Novo tema" />
+              <button class="primary-action" type="submit">Adicionar</button>
+            </form>
+          </div>
+
+          <div class="filter-bar" role="group" aria-label="Filtrar temas">
+            <button class="filter active" type="button" data-topic-filter="all">Todos</button>
+            <button class="filter" type="button" data-topic-filter="idea">Ideias</button>
+            <button class="filter" type="button" data-topic-filter="script">Roteiro</button>
+            <button class="filter" type="button" data-topic-filter="record">Gravação</button>
+            <button class="filter" type="button" data-topic-filter="done">Concluído</button>
+          </div>
+
+          <div class="topic-list" id="topicList" aria-live="polite"></div>
+        </section>
+
+        <section class="view" id="lore" aria-labelledby="lore-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Pesquisa</p>
+              <h2 id="lore-title">Lore de personagem</h2>
+            </div>
+          </div>
+
+          <div class="split-layout">
+            <form class="panel form-panel" id="loreForm">
+              <label>
+                Personagem, plano ou facção
+                <input id="loreQuery" type="text" placeholder="Ex.: Liliana Vess, Nicol Bolas, Phyrexia" required />
+              </label>
+              <label>
+                Enfoque
+                <select id="loreAngle">
+                  <option>Resumo para vídeo</option>
+                  <option>Origem e evolução</option>
+                  <option>Vilão ou herói?</option>
+                  <option>Conexões com cartas</option>
+                  <option>Linha do tempo</option>
+                </select>
+              </label>
+              <button class="primary-action full" type="submit">Montar dossiê</button>
+            </form>
+
+            <article class="panel output-panel lore-output" id="loreOutput">
+              <p>Digite um nome para gerar uma pauta de lore com fontes e ângulos de vídeo.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="cartas" aria-labelledby="cartas-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Scryfall</p>
+              <h2 id="cartas-title">Procurador de cartas</h2>
+            </div>
+          </div>
+
+          <form class="search-strip" id="cardForm">
+            <input id="cardName" type="search" placeholder="Nome da carta" required />
+            <button class="primary-action" type="submit">Buscar</button>
+          </form>
+
+          <div class="card-result" id="cardResult" aria-live="polite">
+            <div class="empty-state">A carta aparece aqui.</div>
+          </div>
+        </section>
+
+        <section class="view" id="decks" aria-labelledby="decks-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Analisador</p>
+              <h2 id="decks-title">Decklist</h2>
+            </div>
+            <button class="ghost-action" type="button" id="loadSampleDeck">Exemplo</button>
+          </div>
+
+          <div class="split-layout">
+            <form class="panel form-panel" id="deckForm">
+              <label>
+                Lista
+                <textarea id="deckInput" rows="18" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Command Tower"></textarea>
+              </label>
+              <button class="primary-action full" type="submit">Analisar deck</button>
+            </form>
+
+            <article class="panel output-panel deck-output" id="deckOutput">
+              <p>Cole uma decklist para calcular contagem, cores, curva e funções.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="src/app.js"></script>
+  </body>
+</html>

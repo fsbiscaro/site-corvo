@@ -265,9 +265,9 @@ main {
   inset: 0;
   z-index: -3;
   background:
-    linear-gradient(90deg, rgba(16, 9, 20, 0.94) 0%, rgba(16, 9, 20, 0.72) 38%, rgba(16, 9, 20, 0.35) 66%, rgba(16, 9, 20, 0.76) 100%),
-    linear-gradient(0deg, rgba(16, 9, 20, 0.62), transparent 42%),
-    url("../assets/brand/banner.png") center 58% / cover no-repeat;
+    radial-gradient(circle at 74% 34%, rgba(255, 242, 184, 0.13), transparent 16rem),
+    linear-gradient(90deg, rgba(16, 9, 20, 0.96) 0%, rgba(42, 16, 48, 0.72) 48%, rgba(16, 9, 20, 0.9) 100%),
+    linear-gradient(0deg, rgba(16, 9, 20, 0.84), rgba(16, 9, 20, 0.28) 45%, rgba(16, 9, 20, 0.82));
   transform: scale(1.04);
   animation: slowStage 18s ease-in-out infinite alternate;
 }
@@ -397,16 +397,7 @@ h3 {
   animation: float 6s ease-in-out infinite;
 }
 
-.hero-ritual {
-  position: absolute;
-  left: 0;
-  top: 2%;
-  width: 42%;
-  opacity: 0.62;
-  transform: translate3d(var(--px, 0), var(--py, 0), 0) rotate(-10deg);
-  filter: drop-shadow(0 24px 30px rgba(167, 58, 16, 0.26));
-  animation: float 7.5s ease-in-out -2s infinite;
-}
+
 
 .hero-metrics {
   position: absolute;
@@ -446,7 +437,7 @@ h3 {
 
 .portal-grid {
   width: min(1180px, calc(100vw - 36px));
-  margin: -46px auto 0;
+  margin: 34px auto 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
@@ -1073,11 +1064,3 @@ pre {
     transition-duration: 1ms !important;
   }
 }
-
-
-
-
-
-
-
-

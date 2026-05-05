@@ -1005,7 +1005,9 @@ pre {
 }
 
 .calendar-day {
+  min-width: 0;
   min-height: 132px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1054,6 +1056,7 @@ pre {
 }
 
 .calendar-day-cards {
+  min-width: 0;
   flex: 1;
   display: grid;
   align-content: start;
@@ -1077,10 +1080,13 @@ pre {
 }
 
 .calendar-topic-card {
-  min-height: 76px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 68px;
   display: grid;
-  gap: 8px;
-  padding: 9px;
+  gap: 6px;
+  padding: 8px;
   border: 1px solid rgba(245, 212, 119, 0.24);
   border-radius: 12px;
   color: var(--text);
@@ -1102,8 +1108,9 @@ pre {
   display: -webkit-box;
   overflow: hidden;
   color: var(--moon);
-  font-size: 0.82rem;
-  line-height: 1.18;
+  font-size: 0.78rem;
+  line-height: 1.16;
+  overflow-wrap: anywhere;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
@@ -1119,20 +1126,24 @@ pre {
 }
 
 .calendar-card-actions {
-  display: flex;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
 }
 
 .calendar-card-action {
+  min-width: 0;
   min-height: 24px;
-  flex: 1;
-  padding: 0 6px;
+  padding: 0 4px;
   border: 1px solid rgba(255, 236, 188, 0.18);
   border-radius: 999px;
   color: var(--moon);
   background: rgba(7, 5, 9, 0.36);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .calendar-card-action:hover {

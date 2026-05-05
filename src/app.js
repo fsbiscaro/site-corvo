@@ -223,8 +223,8 @@ function renderCalendarCard(topic) {
         <span>${escapeHtml(topic.series)}</span>
       </div>
       <div class="calendar-card-actions">
-        <button class="calendar-card-action" type="button" data-topic-toggle="${topic.id}">${isDone ? "Reabrir" : "Feito"}</button>
-        <button class="calendar-card-action muted" type="button" data-topic-unschedule="${topic.id}">Sem data</button>
+        <button class="calendar-card-action" type="button" data-topic-toggle="${topic.id}" aria-label="${isDone ? "Reabrir tema" : "Marcar como feito"}" title="${isDone ? "Reabrir" : "Feito"}">${isDone ? "RE" : "OK"}</button>
+        <button class="calendar-card-action muted" type="button" data-topic-unschedule="${topic.id}" aria-label="Remover data" title="Sem data">X</button>
       </div>
     </article>
   `;

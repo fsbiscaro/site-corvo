@@ -84,7 +84,7 @@
           <div>
             <p class="eyebrow">Painel editorial</p>
             <h2 id="temas-title">Fila de temas</h2>
-            <p class="chapter-lead">Backlog simples para acompanhar quais ideias ainda precisam virar vídeo.</p>
+            <p class="chapter-lead">Crie uma pauta, arraste para uma data e acompanhe o calendário editorial do canal.</p>
           </div>
           <form class="topic-composer" id="topicForm">
             <input id="newTopic" type="text" placeholder="Adicionar tema ou pauta de vídeo" aria-label="Adicionar tema ou pauta de vídeo" />
@@ -101,21 +101,21 @@
             <span>Pendentes</span>
             <strong id="metricTopicPending">0</strong>
           </div>
+          <div class="summary-panel scheduled">
+            <span>Agendados</span>
+            <strong id="metricTopicScheduled">0</strong>
+          </div>
           <div class="summary-panel done">
             <span>Feitos</span>
             <strong id="metricTopicDone">0</strong>
           </div>
-          <div class="summary-panel progress-panel">
-            <span>Conclusão</span>
-            <strong id="metricTopicCompletion">0%</strong>
-          </div>
         </div>
 
-        <section class="topic-board reveal" aria-label="Backlog editorial">
+        <section class="topic-board scheduler-board reveal" aria-label="Calendário editorial">
           <div class="topic-board-header">
             <div>
-              <strong>Backlog editorial</strong>
-              <span>Marque como feito quando o tema já virou vídeo ou está pronto para sair.</span>
+              <strong>Calendário editorial</strong>
+              <span>Arraste um card da pauta para o dia em que o vídeo deve sair.</span>
             </div>
             <div class="filter-bar compact" role="group" aria-label="Filtrar temas">
               <button class="filter active" type="button" data-topic-filter="all">Todos</button>
@@ -124,7 +124,36 @@
             </div>
           </div>
 
-          <div class="topic-list" id="topicList" aria-live="polite"></div>
+          <div class="scheduler-layout">
+            <aside class="schedule-bin" data-unschedule-drop aria-label="Temas sem data">
+              <div class="schedule-bin-header">
+                <strong>Para agendar</strong>
+                <span>Cards sem data ficam aqui.</span>
+              </div>
+              <div class="topic-list" id="topicList" aria-live="polite"></div>
+            </aside>
+
+            <section class="calendar-panel" aria-label="Calendário mensal">
+              <div class="calendar-toolbar">
+                <button class="small-button" type="button" id="calendarPrev" aria-label="Mês anterior">Anterior</button>
+                <strong id="calendarTitle">Calendário</strong>
+                <button class="small-button" type="button" id="calendarNext" aria-label="Próximo mês">Próximo</button>
+                <button class="ghost-action" type="button" id="calendarToday">Hoje</button>
+              </div>
+              <div class="calendar-scroll">
+                <div class="calendar-weekdays" aria-hidden="true">
+                  <span>Seg</span>
+                  <span>Ter</span>
+                  <span>Qua</span>
+                  <span>Qui</span>
+                  <span>Sex</span>
+                  <span>Sáb</span>
+                  <span>Dom</span>
+                </div>
+                <div class="calendar-grid" id="calendarGrid" aria-live="polite"></div>
+              </div>
+            </section>
+          </div>
         </section>
       </section>
 

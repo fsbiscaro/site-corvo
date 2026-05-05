@@ -33,7 +33,8 @@ function normalizeTopics(topics) {
     .filter((topic) => topic.series !== "Lore")
     .map((topic) => ({
       ...topic,
-      status: topic.status === "done" ? "done" : "pending"
+      status: topic.status === "done" ? "done" : "pending",
+      scheduledDate: isValidDateKey(topic.scheduledDate) ? topic.scheduledDate : ""
     }));
 }
 
@@ -82,15 +83,15 @@ document.querySelectorAll("[data-jump]").forEach((button) => {
 function renderMetrics() {
   const total = state.topics.length;
   const done = state.topics.filter((topic) => topic.status === "done").length;
+  const scheduled = state.topics.filter((topic) => topic.scheduledDate).length;
   const pending = total - done;
-  const completion = total ? Math.round((done / total) * 100) : 0;
 
   document.querySelector("#metricThemes").textContent = pending;
   document.querySelector("#metricDone").textContent = done;
   setText("#metricTopicTotal", total);
   setText("#metricTopicPending", pending);
+  setText("#metricTopicScheduled", scheduled);
   setText("#metricTopicDone", done);
-  setText("#metricTopicCompletion", `${completion}%`);
 }
 
 function setText(selector, value) {
@@ -104,15 +105,19 @@ const statusLabels = {
 };
 
 let activeTopicFilter = "all";
+let calendarCursor = getMonthStart(new Date());
 
 function renderTopics() {
   const list = document.querySelector("#topicList");
-  const topics = state.topics.filter((topic) => activeTopicFilter === "all" || topic.status === activeTopicFilter);
+  const topics = getFilteredTopics().filter((topic) => !topic.scheduledDate);
+  if (!list) return;
 
   renderMetrics();
+  renderCalendar();
 
   if (!topics.length) {
-    list.innerHTML = '<div class="empty-state topic-empty">Nenhum tema nesse filtro.</div>';
+    list.innerHTML = '<div class="empty-state topic-empty">Nenhum card sem data nesse filtro.</div>';
+    bindTopicActions();
     return;
   }
 
@@ -120,23 +125,7 @@ function renderTopics() {
     .map((topic, index) => renderTopicRow(topic, index))
     .join("");
 
-  list.querySelectorAll("[data-topic-toggle]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const topic = state.topics.find((item) => item.id === button.dataset.topicToggle);
-      if (!topic) return;
-      topic.status = topic.status === "done" ? "pending" : "done";
-      persist();
-      renderTopics();
-    });
-  });
-
-  list.querySelectorAll("[data-topic-delete]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.topics = state.topics.filter((topic) => topic.id !== button.dataset.topicDelete);
-      persist();
-      renderTopics();
-    });
-  });
+  bindTopicActions();
 }
 
 function renderTopicRow(topic, index) {
@@ -146,7 +135,7 @@ function renderTopicRow(topic, index) {
   const position = String(index + 1).padStart(2, "0");
 
   return `
-    <article class="topic-row${isDone ? " is-done" : ""}">
+    <article class="topic-row topic-draggable${isDone ? " is-done" : ""}" draggable="true" data-topic-drag="${topic.id}">
       <button class="topic-check" type="button" data-topic-toggle="${topic.id}" aria-pressed="${isDone}" aria-label="${isDone ? "Reabrir tema" : "Marcar tema como feito"}">
         <span></span>
       </button>
@@ -163,6 +152,88 @@ function renderTopicRow(topic, index) {
   `;
 }
 
+function bindTopicActions() {
+  const topicsView = document.querySelector("#temas");
+  if (!topicsView) return;
+
+  topicsView.querySelectorAll("[data-topic-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const topic = state.topics.find((item) => item.id === button.dataset.topicToggle);
+      if (!topic) return;
+      topic.status = topic.status === "done" ? "pending" : "done";
+      persist();
+      renderTopics();
+    });
+  });
+
+  topicsView.querySelectorAll("[data-topic-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.topics = state.topics.filter((topic) => topic.id !== button.dataset.topicDelete);
+      persist();
+      renderTopics();
+    });
+  });
+
+  topicsView.querySelectorAll("[data-topic-unschedule]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const topic = state.topics.find((item) => item.id === button.dataset.topicUnschedule);
+      if (!topic) return;
+      topic.scheduledDate = "";
+      persist();
+      renderTopics();
+    });
+  });
+}
+
+function renderCalendar() {
+  const grid = document.querySelector("#calendarGrid");
+  const title = document.querySelector("#calendarTitle");
+  if (!grid || !title) return;
+
+  title.textContent = formatMonthTitle(calendarCursor);
+  grid.innerHTML = buildCalendarDays(calendarCursor).map((date) => renderCalendarDay(date)).join("");
+}
+
+function renderCalendarDay(date) {
+  const dateKey = formatDateKey(date);
+  const isOutside = date.getMonth() !== calendarCursor.getMonth();
+  const isToday = dateKey === formatDateKey(new Date());
+  const topics = getFilteredTopics().filter((topic) => topic.scheduledDate === dateKey);
+  const label = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" }).format(date);
+
+  return `
+    <div class="calendar-day${isOutside ? " outside-month" : ""}${isToday ? " today" : ""}" data-calendar-date="${dateKey}" aria-label="${escapeHtml(label)}">
+      <div class="calendar-day-head">
+        <span>${date.getDate()}</span>
+        ${isToday ? '<strong>Hoje</strong>' : ""}
+      </div>
+      <div class="calendar-day-cards">
+        ${topics.length ? topics.map(renderCalendarCard).join("") : '<span class="calendar-drop-hint">Solte aqui</span>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderCalendarCard(topic) {
+  const isDone = topic.status === "done";
+  return `
+    <article class="calendar-topic-card${isDone ? " is-done" : ""}" draggable="true" data-topic-drag="${topic.id}">
+      <div>
+        <strong>${escapeHtml(topic.title)}</strong>
+        <span>${escapeHtml(topic.series)}</span>
+      </div>
+      <div class="calendar-card-actions">
+        <button class="calendar-card-action" type="button" data-topic-toggle="${topic.id}">${isDone ? "Reabrir" : "Feito"}</button>
+        <button class="calendar-card-action muted" type="button" data-topic-unschedule="${topic.id}">Sem data</button>
+      </div>
+    </article>
+  `;
+}
+
+function getFilteredTopics() {
+  return state.topics.filter((topic) => activeTopicFilter === "all" || topic.status === activeTopicFilter);
+}
+
 document.querySelectorAll("[data-topic-filter]").forEach((button) => {
   button.addEventListener("click", () => {
     activeTopicFilter = button.dataset.topicFilter;
@@ -170,6 +241,32 @@ document.querySelectorAll("[data-topic-filter]").forEach((button) => {
     renderTopics();
   });
 });
+
+const calendarPrev = document.querySelector("#calendarPrev");
+const calendarNext = document.querySelector("#calendarNext");
+const calendarToday = document.querySelector("#calendarToday");
+
+calendarPrev?.addEventListener("click", () => {
+  calendarCursor = addMonths(calendarCursor, -1);
+  renderTopics();
+});
+
+calendarNext?.addEventListener("click", () => {
+  calendarCursor = addMonths(calendarCursor, 1);
+  renderTopics();
+});
+
+calendarToday?.addEventListener("click", () => {
+  calendarCursor = getMonthStart(new Date());
+  renderTopics();
+});
+
+const topicsView = document.querySelector("#temas");
+topicsView?.addEventListener("dragstart", handleTopicDragStart);
+topicsView?.addEventListener("dragend", handleTopicDragEnd);
+topicsView?.addEventListener("dragover", handleTopicDragOver);
+topicsView?.addEventListener("dragleave", handleTopicDragLeave);
+topicsView?.addEventListener("drop", handleTopicDrop);
 
 document.querySelector("#topicForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -181,12 +278,105 @@ document.querySelector("#topicForm").addEventListener("submit", (event) => {
     id: crypto.randomUUID(),
     title,
     series: detectSeries(title),
-    status: "pending"
+    status: "pending",
+    scheduledDate: ""
   });
   input.value = "";
   persist();
   renderTopics();
 });
+
+function handleTopicDragStart(event) {
+  const card = event.target.closest("[data-topic-drag]");
+  if (!card) return;
+
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", card.dataset.topicDrag);
+  window.requestAnimationFrame(() => card.classList.add("is-dragging"));
+}
+
+function handleTopicDragEnd() {
+  clearDropTargets();
+  document.querySelectorAll(".is-dragging").forEach((element) => element.classList.remove("is-dragging"));
+}
+
+function handleTopicDragOver(event) {
+  const zone = getScheduleDropZone(event.target);
+  if (!zone) return;
+
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  zone.classList.add("is-drop-target");
+}
+
+function handleTopicDragLeave(event) {
+  const zone = getScheduleDropZone(event.target);
+  if (!zone || zone.contains(event.relatedTarget)) return;
+  zone.classList.remove("is-drop-target");
+}
+
+function handleTopicDrop(event) {
+  const zone = getScheduleDropZone(event.target);
+  if (!zone) return;
+
+  event.preventDefault();
+  const topic = state.topics.find((item) => item.id === event.dataTransfer.getData("text/plain"));
+  if (!topic) return;
+
+  topic.scheduledDate = zone.dataset.calendarDate || "";
+  persist();
+  renderTopics();
+  setTransientStatus(topic.scheduledDate ? `Agendado para ${formatDisplayDate(topic.scheduledDate)}` : "Sem data");
+}
+
+function getScheduleDropZone(target) {
+  return target.closest("[data-calendar-date], [data-unschedule-drop]");
+}
+
+function clearDropTargets() {
+  document.querySelectorAll(".is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
+}
+
+function buildCalendarDays(cursor) {
+  const firstDay = getMonthStart(cursor);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const firstVisibleDay = new Date(firstDay.getFullYear(), firstDay.getMonth(), 1 - startOffset);
+
+  return Array.from({ length: 42 }, (_, index) => new Date(firstVisibleDay.getFullYear(), firstVisibleDay.getMonth(), firstVisibleDay.getDate() + index));
+}
+
+function addMonths(date, amount) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function getMonthStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function formatMonthTitle(date) {
+  const title = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function formatDateKey(date) {
+  return [date.getFullYear(), padDatePart(date.getMonth() + 1), padDatePart(date.getDate())].join("-");
+}
+
+function formatDisplayDate(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return `${padDatePart(day)}/${padDatePart(month)}/${String(year).slice(2)}`;
+}
+
+function isValidDateKey(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function padDatePart(value) {
+  return String(value).padStart(2, "0");
+}
 
 function detectSeries(title) {
   const lower = title.toLowerCase();

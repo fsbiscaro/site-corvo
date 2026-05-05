@@ -664,6 +664,7 @@ pre {
 
 .search-strip {
   position: relative;
+  z-index: 24;
   margin-bottom: 18px;
 }
 
@@ -677,7 +678,7 @@ pre {
   top: calc(100% + 10px);
   left: 0;
   right: 0;
-  z-index: 16;
+  z-index: 30;
   display: none;
   max-height: min(480px, 62vh);
   overflow-y: auto;
@@ -686,7 +687,7 @@ pre {
   border-radius: 20px;
   background:
     linear-gradient(145deg, rgba(255, 242, 184, 0.1), transparent 34%),
-    rgba(14, 8, 18, 0.96);
+    rgba(14, 8, 18, 0.99);
   box-shadow: 0 26px 62px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(126, 38, 48, 0.2);
   backdrop-filter: blur(20px);
 }
@@ -778,6 +779,8 @@ pre {
 }
 
 .card-result {
+  position: relative;
+  z-index: 1;
   min-height: 380px;
 }
 

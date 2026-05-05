@@ -272,32 +272,13 @@ async function fetchCardSuggestions(query) {
   suggestionAbortController = new AbortController();
   lastSuggestionQuery = normalizeQuery(query);
   suggestionCards = [];
-  renderSuggestionNote("Procurando versões...");
-
-  const params = new URLSearchParams({
-    q: `name:"${escapeScryfallQuery(query)}"`,
-    unique: "prints",
-    order: "released",
-    dir: "desc",
-    include_extras: "false"
-  });
+  renderSuggestionNote("Procurando em português e inglês...");
 
   try {
-    const response = await fetch(`https://api.scryfall.com/cards/search?${params.toString()}`, {
-      headers: { Accept: "application/json" },
-      signal: suggestionAbortController.signal
-    });
-
-    if (!response.ok) {
-      suggestionCards = [];
-      renderSuggestionNote("Nenhuma versão encontrada.");
-      return;
-    }
-
-    const data = await response.json();
+    const cards = await fetchSuggestionCandidates(query, suggestionAbortController.signal);
     if (lastSuggestionQuery !== normalizeQuery(cardInput.value.trim())) return;
 
-    suggestionCards = (data.data || []).slice(0, 12);
+    suggestionCards = rankCardSuggestions(cards, query).slice(0, 12);
     renderCardSuggestions(suggestionCards, query);
   } catch (error) {
     if (error.name === "AbortError") return;
@@ -306,6 +287,44 @@ async function fetchCardSuggestions(query) {
   }
 }
 
+async function fetchSuggestionCandidates(query, signal) {
+  const searches = [
+    fetchScryfallSearch(buildSearchUrl(`lang:pt ${escapeScryfallLooseQuery(query)}`, true), signal),
+    fetchScryfallSearch(buildSearchUrl(`name:"${escapeScryfallQuery(query)}"`, false), signal)
+  ];
+
+  const results = await Promise.allSettled(searches);
+  const cards = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+  return dedupeCards(cards).filter((card) => cardMatchesLookup(card, query));
+}
+
+async function fetchScryfallSearch(url, signal) {
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+    signal
+  });
+
+  if (response.status === 404) return [];
+  if (!response.ok) throw new Error("Falha na busca de cartas.");
+  const data = await response.json();
+  return data.data || [];
+}
+
+function buildSearchUrl(query, includeMultilingual) {
+  const params = new URLSearchParams({
+    q: query,
+    unique: "prints",
+    order: "released",
+    dir: "desc",
+    include_extras: "false"
+  });
+
+  if (includeMultilingual) {
+    params.set("include_multilingual", "true");
+  }
+
+  return `https://api.scryfall.com/cards/search?${params.toString()}`;
+}
 function renderCardSuggestions(cards, query) {
   if (!cards.length) {
     renderSuggestionNote(`Nenhuma versão encontrada para "${query}".`);
@@ -319,13 +338,17 @@ function renderCardSuggestions(cards, query) {
       const setLine = formatSuggestionSet(card);
       const releaseYear = card.released_at ? card.released_at.slice(0, 4) : "";
       const rarity = card.rarity ? capitalize(card.rarity) : "";
-      const detailLine = [setLine, releaseYear, rarity].filter(Boolean).join(" · ");
+      const language = formatCardLanguage(card.lang);
+      const primaryName = getCardDisplayName(card);
+      const secondaryName = getCardSecondaryName(card);
+      const nameLine = secondaryName ? `${secondaryName} · ${language}` : language;
+      const detailLine = [nameLine, setLine, releaseYear, rarity].filter(Boolean).join(" · ");
 
       return `
         <button class="card-suggestion" type="button" role="option" aria-selected="false" data-card-id="${escapeHtml(card.id)}">
           ${image ? `<img class="suggestion-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" />` : '<span class="suggestion-thumb suggestion-thumb-empty"></span>'}
           <span class="suggestion-copy">
-            <strong>${escapeHtml(card.name)}</strong>
+            <strong>${escapeHtml(primaryName)}</strong>
             <span>${escapeHtml(detailLine || "Edição não identificada")}</span>
           </span>
           <span class="suggestion-code">${escapeHtml(setCode)}</span>
@@ -336,14 +359,13 @@ function renderCardSuggestions(cards, query) {
 
   openCardSuggestions();
 }
-
 function renderSuggestionNote(text) {
   cardSuggestions.innerHTML = `<div class="suggestion-note">${escapeHtml(text)}</div>`;
   openCardSuggestions();
 }
 
 function selectSuggestedCard(card) {
-  cardInput.value = card.name;
+  cardInput.value = getCardDisplayName(card);
   hideCardSuggestions();
   renderCard(card);
   setTransientStatus("Carta selecionada");
@@ -372,12 +394,124 @@ function formatSuggestionSet(card) {
   return [setName, collector].filter(Boolean).join(" ");
 }
 
+function dedupeCards(cards) {
+  const seen = new Set();
+  return cards.filter((card) => {
+    if (!card?.id || seen.has(card.id)) return false;
+    seen.add(card.id);
+    return true;
+  });
+}
+
+function rankCardSuggestions(cards, query) {
+  return [...cards].sort((a, b) => {
+    const scoreA = getCardMatchScore(a, query);
+    const scoreB = getCardMatchScore(b, query);
+    if (scoreA !== scoreB) return scoreA - scoreB;
+    return (b.released_at || "").localeCompare(a.released_at || "");
+  });
+}
+
+function getCardMatchScore(card, query) {
+  const normalizedQuery = normalizeLookupText(query);
+  const printedNames = getPrintedLookupNames(card);
+  const englishNames = getEnglishLookupNames(card);
+  const allNames = [...printedNames, ...englishNames];
+  const best = Math.min(...allNames.map((name) => getTextMatchScore(name, normalizedQuery)), 99);
+  let score = best;
+
+  if (printedNames.some((name) => getTextMatchScore(name, normalizedQuery) <= best) && card.lang === "pt") {
+    score -= 0.35;
+  }
+
+  if (englishNames.some((name) => getTextMatchScore(name, normalizedQuery) <= best) && card.lang === "en") {
+    score -= 0.25;
+  }
+
+  if (card.image_status === "placeholder") {
+    score += 0.5;
+  }
+
+  return score;
+}
+
+function getTextMatchScore(value, normalizedQuery) {
+  const normalizedValue = normalizeLookupText(value);
+  if (!normalizedValue || !normalizedQuery) return 99;
+  if (normalizedValue === normalizedQuery) return 0;
+  if (normalizedValue.startsWith(normalizedQuery)) return 1;
+  if (normalizedValue.includes(normalizedQuery)) return 2;
+  return 99;
+}
+
+function cardMatchesLookup(card, query) {
+  const normalizedQuery = normalizeLookupText(query);
+  return getLookupNames(card).some((name) => normalizeLookupText(name).includes(normalizedQuery));
+}
+
+function getLookupNames(card) {
+  return [...getPrintedLookupNames(card), ...getEnglishLookupNames(card)];
+}
+
+function getPrintedLookupNames(card) {
+  return [
+    card.printed_name,
+    ...(card.card_faces || []).map((face) => face.printed_name)
+  ].filter(Boolean);
+}
+
+function getEnglishLookupNames(card) {
+  return [
+    card.name,
+    ...(card.card_faces || []).map((face) => face.name)
+  ].filter(Boolean);
+}
+
+function getCardDisplayName(card) {
+  return card.printed_name || card.card_faces?.[0]?.printed_name || card.name;
+}
+
+function getCardSecondaryName(card) {
+  const displayName = getCardDisplayName(card);
+  return displayName !== card.name ? card.name : "";
+}
+
+function getCardRulesText(card) {
+  if (card.printed_text || card.oracle_text) {
+    return card.printed_text || card.oracle_text;
+  }
+
+  return card.card_faces?.map((face) => {
+    const faceName = face.printed_name || face.name;
+    const faceText = face.printed_text || face.oracle_text || "";
+    return `${faceName}\n${faceText}`.trim();
+  }).join("\n\n") || "Sem texto Oracle.";
+}
+
+function formatCardLanguage(lang) {
+  const labels = { en: "EN", pt: "PT" };
+  return labels[lang] || (lang ? lang.toUpperCase() : "EN");
+}
+
 function normalizeQuery(value) {
   return value.trim().toLowerCase();
 }
 
+function normalizeLookupText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function escapeScryfallQuery(value) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function escapeScryfallLooseQuery(value) {
+  return value.replace(/[(){}\[\]^~*?:\\]/g, " ").replace(/"/g, " ").trim();
 }
 
 function capitalize(value) {
@@ -389,28 +523,60 @@ async function searchCard(name) {
   result.innerHTML = '<div class="empty-state">Buscando...</div>';
 
   try {
-    const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error("Carta não encontrada.");
-    const card = await response.json();
-    renderCard(card);
+    const exactPortugueseCard = await fetchExactPortugueseCard(name);
+    if (exactPortugueseCard) {
+      renderCard(exactPortugueseCard);
+      return;
+    }
+
+    try {
+      const card = await fetchNamedCard(name);
+      renderCard(card);
+      return;
+    } catch {
+      const candidates = await fetchSuggestionCandidates(name, undefined);
+      const [card] = rankCardSuggestions(candidates, name);
+      if (!card) throw new Error("Carta não encontrada.");
+      renderCard(card);
+    }
   } catch (error) {
     result.innerHTML = `<div class="empty-state error-text">${escapeHtml(error.message)}</div>`;
   }
 }
 
+async function fetchExactPortugueseCard(name) {
+  try {
+    const cards = await fetchScryfallSearch(buildSearchUrl(`lang:pt !"${escapeScryfallQuery(name)}"`, true), undefined);
+    const normalizedName = normalizeLookupText(name);
+    return cards.find((card) => normalizeLookupText(card.printed_name || "") === normalizedName) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchNamedCard(name) {
+  const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error("Carta não encontrada.");
+  return response.json();
+}
 function renderCard(card) {
   const displayImage = getCardImage(card, "large") || getCardImage(card, "normal") || "";
-  const oracle = card.oracle_text || card.card_faces?.map((face) => `${face.name}\n${face.oracle_text || ""}`).join("\n\n") || "Sem texto Oracle.";
+  const rulesText = getCardRulesText(card);
+  const typeLine = card.printed_type_line || card.type_line || "";
   const legality = card.legalities?.commander || "unknown";
-  const ligaSearch = `https://www.ligamagic.com.br/?view=cards/search&card=${encodeURIComponent(card.name)}`;
+  const displayName = getCardDisplayName(card);
+  const secondaryName = getCardSecondaryName(card);
+  const language = formatCardLanguage(card.lang);
+  const ligaSearch = `https://www.ligamagic.com.br/?view=cards/search&card=${encodeURIComponent(displayName)}`;
   const downloads = getCardDownloads(card);
   const setDescription = [card.set_name, card.set ? card.set.toUpperCase() : "", card.collector_number ? `#${card.collector_number}` : ""].filter(Boolean).join(" · ");
 
   document.querySelector("#cardResult").innerHTML = `
     <div class="card-display">
-      ${displayImage ? `<img class="card-image" src="${displayImage}" alt="${escapeHtml(card.name)}" />` : ""}
+      ${displayImage ? `<img class="card-image" src="${displayImage}" alt="${escapeHtml(displayName)}" />` : ""}
       <article class="card-info">
-        <h3>${escapeHtml(card.name)}</h3>
+        <h3>${escapeHtml(displayName)}</h3>
+        ${secondaryName ? `<p class="card-subtitle">${escapeHtml(secondaryName)} · ${escapeHtml(language)}</p>` : `<p class="card-subtitle">${escapeHtml(language)}</p>`}
         <div class="download-panel">
           <strong>Imagem para vídeo</strong>
           <span>PNG em alta resolução. O arquivo vai para a pasta padrão de downloads do navegador.</span>
@@ -426,13 +592,13 @@ function renderCard(card) {
           <dt>Custo</dt>
           <dd>${escapeHtml(card.mana_cost || "Sem custo")}</dd>
           <dt>Tipo</dt>
-          <dd>${escapeHtml(card.type_line || "")}</dd>
+          <dd>${escapeHtml(typeLine)}</dd>
           <dt>Edição</dt>
           <dd>${escapeHtml(setDescription || "N/D")}</dd>
           <dt>Lançamento</dt>
           <dd>${escapeHtml(card.released_at || "N/D")}</dd>
           <dt>Texto</dt>
-          <dd>${escapeHtml(oracle).replace(/\n/g, "<br>")}</dd>
+          <dd>${escapeHtml(rulesText).replace(/\n/g, "<br>")}</dd>
           <dt>Commander</dt>
           <dd>${escapeHtml(legality)}</dd>
           <dt>Preço USD</dt>
@@ -447,7 +613,6 @@ function renderCard(card) {
     </div>
   `;
 }
-
 function getCardImage(card, size) {
   return card.image_uris?.[size] || card.card_faces?.[0]?.image_uris?.[size] || "";
 }
@@ -474,7 +639,8 @@ function getCardDownloads(card) {
 
 function buildCardFileBase(card) {
   const printCode = [card.set, card.collector_number].filter(Boolean).join("-");
-  return sanitizeFileName(printCode ? `${card.name}-${printCode}` : card.name);
+  const displayName = getCardDisplayName(card);
+  return sanitizeFileName(printCode ? `${displayName}-${printCode}` : displayName);
 }
 
 async function downloadCardImage(url, fileName) {

@@ -811,6 +811,12 @@ pre {
   padding: 22px;
 }
 
+.card-subtitle {
+  margin: -6px 0 16px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .card-info dl,
 .deck-stats {
   display: grid;

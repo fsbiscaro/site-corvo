@@ -249,10 +249,15 @@ main {
   position: absolute;
   inset: 0;
   z-index: -3;
-  background:
-    radial-gradient(circle at 74% 28%, rgba(255, 242, 184, 0.13), transparent 17rem),
-    linear-gradient(90deg, rgba(16, 9, 20, 0.96) 0%, rgba(42, 16, 48, 0.72) 48%, rgba(16, 9, 20, 0.9) 100%),
-    linear-gradient(180deg, rgba(16, 9, 20, 0.78), rgba(16, 9, 20, 0.3) 42%, rgba(10, 8, 12, 0.82) 100%);
+  background-image:
+    radial-gradient(circle at 74% 28%, rgba(255, 242, 184, 0.1), transparent 18rem),
+    radial-gradient(circle, rgba(255, 242, 184, 0.46) 0 1px, transparent 1.5px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.28) 0 1px, transparent 1.4px),
+    radial-gradient(circle, rgba(245, 212, 119, 0.24) 0 1px, transparent 1.3px),
+    linear-gradient(90deg, rgba(10, 7, 13, 0.98) 0%, rgba(36, 14, 44, 0.38) 50%, rgba(9, 7, 12, 0.96) 100%),
+    linear-gradient(180deg, rgba(14, 8, 17, 0.8), rgba(9, 7, 11, 0.88) 58%, rgba(8, 7, 10, 0.96) 100%);
+  background-position: center, 18px 42px, 122px 110px, 240px 70px, center, center;
+  background-size: auto, 260px 220px, 340px 260px, 460px 320px, auto, auto;
   transform: scale(1.04);
   animation: slowStage 18s ease-in-out infinite alternate;
 }

@@ -946,6 +946,7 @@ pre {
 
 .schedule-bin .topic-row {
   grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
   min-height: 0;
   gap: 10px;
   padding: 12px;
@@ -955,10 +956,24 @@ pre {
   cursor: grab;
 }
 
-.schedule-bin .topic-status,
-.schedule-bin .topic-actions {
+.schedule-bin .topic-status {
   grid-column: 2;
   justify-self: start;
+}
+
+.schedule-bin .topic-actions {
+  grid-column: 1 / -1;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  justify-self: stretch;
+}
+
+.schedule-bin .topic-actions .small-button {
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
 }
 
 .topic-draggable:active,

@@ -641,6 +641,26 @@ pre {
   gap: 10px;
   width: min(620px, 100%);
 }
+.schedule-composer {
+  width: 100%;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 236, 188, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 248, 232, 0.04);
+}
+
+.schedule-composer input {
+  height: 44px;
+  min-width: 0;
+  border-radius: 13px;
+}
+
+.schedule-composer .primary-action {
+  width: 100%;
+  min-height: 42px;
+}
 
 .topic-summary {
   display: grid;

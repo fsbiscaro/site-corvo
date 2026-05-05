@@ -86,10 +86,6 @@
             <h2 id="temas-title">Fila de temas</h2>
             <p class="chapter-lead">Crie uma pauta, arraste para uma data e acompanhe o calendário editorial do canal.</p>
           </div>
-          <form class="topic-composer" id="topicForm">
-            <input id="newTopic" type="text" placeholder="Adicionar tema ou pauta de vídeo" aria-label="Adicionar tema ou pauta de vídeo" />
-            <button class="primary-action" type="submit">Adicionar</button>
-          </form>
         </div>
 
         <div class="topic-summary reveal" aria-label="Resumo da pauta">
@@ -130,6 +126,10 @@
                 <strong>Para agendar</strong>
                 <span>Cards sem data ficam aqui.</span>
               </div>
+              <form class="topic-composer schedule-composer" id="topicForm">
+                <input id="newTopic" type="text" placeholder="Novo tema ou pauta" aria-label="Adicionar tema ou pauta de vídeo" />
+                <button class="primary-action" type="submit">Adicionar</button>
+              </form>
               <div class="topic-list" id="topicList" aria-live="polite"></div>
             </aside>
 

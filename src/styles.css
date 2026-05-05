@@ -237,8 +237,24 @@ main {
 }
 
 .hero-view {
+  position: relative;
   min-height: 100vh;
-  padding-bottom: 78px;
+  padding-bottom: 96px;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.hero-view::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  background:
+    radial-gradient(circle at 74% 28%, rgba(255, 242, 184, 0.13), transparent 17rem),
+    linear-gradient(90deg, rgba(16, 9, 20, 0.96) 0%, rgba(42, 16, 48, 0.72) 48%, rgba(16, 9, 20, 0.9) 100%),
+    linear-gradient(180deg, rgba(16, 9, 20, 0.78), rgba(16, 9, 20, 0.3) 42%, rgba(10, 8, 12, 0.82) 100%);
+  transform: scale(1.04);
+  animation: slowStage 18s ease-in-out infinite alternate;
 }
 
 .hero-stage {
@@ -252,24 +268,11 @@ main {
 }
 
 .hero-stage::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0;
-  height: 34%;
-  z-index: -1;
-  background: linear-gradient(to bottom, transparent, rgba(16, 9, 20, 0.98));
+  content: none;
 }
 
 .hero-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: -3;
-  background:
-    radial-gradient(circle at 74% 34%, rgba(255, 242, 184, 0.13), transparent 16rem),
-    linear-gradient(90deg, rgba(16, 9, 20, 0.96) 0%, rgba(42, 16, 48, 0.72) 48%, rgba(16, 9, 20, 0.9) 100%),
-    linear-gradient(0deg, rgba(16, 9, 20, 0.84), rgba(16, 9, 20, 0.28) 45%, rgba(16, 9, 20, 0.82));
-  transform: scale(1.04);
-  animation: slowStage 18s ease-in-out infinite alternate;
+  display: none;
 }
 
 .hero-copy {

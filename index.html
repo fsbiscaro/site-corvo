@@ -54,11 +54,11 @@
           <div class="hero-metrics reveal" aria-label="Resumo do grimório">
             <div>
               <strong id="metricThemes">0</strong>
-              <span>temas vivos</span>
+              <span>pendentes</span>
             </div>
             <div>
               <strong id="metricDone">0</strong>
-              <span>selados</span>
+              <span>feitos</span>
             </div>
           </div>
         </div>
@@ -66,7 +66,7 @@
         <div class="portal-grid" aria-label="Ferramentas">
           <button class="tool-tile reveal" type="button" data-jump="temas">
             <span>Temas</span>
-            <strong>fila, séries, progresso</strong>
+            <strong>backlog, status, pauta</strong>
           </button>
           <button class="tool-tile reveal" type="button" data-jump="cartas">
             <span>Cartas</span>
@@ -80,26 +80,52 @@
       </section>
 
       <section class="view chapter-view" id="temas" aria-labelledby="temas-title">
-        <div class="chapter-hero">
+        <div class="chapter-hero topics-hero">
           <div>
-            <p class="eyebrow">Calendário encantado</p>
-            <h2 id="temas-title">Temas e séries</h2>
+            <p class="eyebrow">Painel editorial</p>
+            <h2 id="temas-title">Fila de temas</h2>
+            <p class="chapter-lead">Backlog simples para acompanhar quais ideias ainda precisam virar vídeo.</p>
           </div>
-          <form class="inline-form" id="topicForm">
-            <input id="newTopic" type="text" placeholder="Novo tema" aria-label="Novo tema" />
+          <form class="topic-composer" id="topicForm">
+            <input id="newTopic" type="text" placeholder="Adicionar tema ou pauta de vídeo" aria-label="Adicionar tema ou pauta de vídeo" />
             <button class="primary-action" type="submit">Adicionar</button>
           </form>
         </div>
 
-        <div class="filter-bar reveal" role="group" aria-label="Filtrar temas">
-          <button class="filter active" type="button" data-topic-filter="all">Todos</button>
-          <button class="filter" type="button" data-topic-filter="idea">Ideias</button>
-          <button class="filter" type="button" data-topic-filter="research">Pesquisa</button>
-          <button class="filter" type="button" data-topic-filter="record">Gravação</button>
-          <button class="filter" type="button" data-topic-filter="done">Concluído</button>
+        <div class="topic-summary reveal" aria-label="Resumo da pauta">
+          <div class="summary-panel">
+            <span>Total na pauta</span>
+            <strong id="metricTopicTotal">0</strong>
+          </div>
+          <div class="summary-panel highlight">
+            <span>Pendentes</span>
+            <strong id="metricTopicPending">0</strong>
+          </div>
+          <div class="summary-panel done">
+            <span>Feitos</span>
+            <strong id="metricTopicDone">0</strong>
+          </div>
+          <div class="summary-panel progress-panel">
+            <span>Conclusão</span>
+            <strong id="metricTopicCompletion">0%</strong>
+          </div>
         </div>
 
-        <div class="topic-list reveal" id="topicList" aria-live="polite"></div>
+        <section class="topic-board reveal" aria-label="Backlog editorial">
+          <div class="topic-board-header">
+            <div>
+              <strong>Backlog editorial</strong>
+              <span>Marque como feito quando o tema já virou vídeo ou está pronto para sair.</span>
+            </div>
+            <div class="filter-bar compact" role="group" aria-label="Filtrar temas">
+              <button class="filter active" type="button" data-topic-filter="all">Todos</button>
+              <button class="filter" type="button" data-topic-filter="pending">Pendentes</button>
+              <button class="filter" type="button" data-topic-filter="done">Feitos</button>
+            </div>
+          </div>
+
+          <div class="topic-list" id="topicList" aria-live="polite"></div>
+        </section>
       </section>
 
       <section class="view chapter-view" id="cartas" aria-labelledby="cartas-title">

@@ -1,9 +1,9 @@
 const STORAGE_KEY = "grimorio-corvo-state-v1";
 
 const defaultTopics = [
-  { id: crypto.randomUUID(), title: "Upgrade de precon por ate R$50", series: "Commander barato", status: "idea" },
-  { id: crypto.randomUUID(), title: "Cartas que parecem ruins ate ganharem a mesa", series: "Carta esquecida", status: "idea" },
-  { id: crypto.randomUUID(), title: "Analisar um deck de comandante subestimado", series: "Decks", status: "research" },
+  { id: crypto.randomUUID(), title: "Upgrade de precon por ate R$50", series: "Commander barato", status: "pending" },
+  { id: crypto.randomUUID(), title: "Cartas que parecem ruins ate ganharem a mesa", series: "Carta esquecida", status: "pending" },
+  { id: crypto.randomUUID(), title: "Analisar um deck de comandante subestimado", series: "Decks", status: "pending" },
   { id: crypto.randomUUID(), title: "Top 10 remocoes pretas para Commander", series: "Cartas", status: "done" }
 ];
 
@@ -33,7 +33,7 @@ function normalizeTopics(topics) {
     .filter((topic) => topic.series !== "Lore")
     .map((topic) => ({
       ...topic,
-      status: topic.status === "script" ? "research" : topic.status
+      status: topic.status === "done" ? "done" : "pending"
     }));
 }
 
@@ -80,15 +80,27 @@ document.querySelectorAll("[data-jump]").forEach((button) => {
 });
 
 function renderMetrics() {
-  document.querySelector("#metricThemes").textContent = state.topics.filter((topic) => topic.status !== "done").length;
-  document.querySelector("#metricDone").textContent = state.topics.filter((topic) => topic.status === "done").length;
+  const total = state.topics.length;
+  const done = state.topics.filter((topic) => topic.status === "done").length;
+  const pending = total - done;
+  const completion = total ? Math.round((done / total) * 100) : 0;
+
+  document.querySelector("#metricThemes").textContent = pending;
+  document.querySelector("#metricDone").textContent = done;
+  setText("#metricTopicTotal", total);
+  setText("#metricTopicPending", pending);
+  setText("#metricTopicDone", done);
+  setText("#metricTopicCompletion", `${completion}%`);
+}
+
+function setText(selector, value) {
+  const element = document.querySelector(selector);
+  if (element) element.textContent = value;
 }
 
 const statusLabels = {
-  idea: "Ideia",
-  research: "Pesquisa",
-  record: "Gravação",
-  done: "Concluído"
+  pending: "Pendente",
+  done: "Feito"
 };
 
 let activeTopicFilter = "all";
@@ -97,36 +109,22 @@ function renderTopics() {
   const list = document.querySelector("#topicList");
   const topics = state.topics.filter((topic) => activeTopicFilter === "all" || topic.status === activeTopicFilter);
 
+  renderMetrics();
+
   if (!topics.length) {
-    list.innerHTML = '<div class="empty-state">Nenhum tema nesse filtro.</div>';
+    list.innerHTML = '<div class="empty-state topic-empty">Nenhum tema nesse filtro.</div>';
     return;
   }
 
   list.innerHTML = topics
-    .map((topic) => {
-      return `
-        <article class="topic-item">
-          <div class="topic-main">
-            <div class="topic-title">${escapeHtml(topic.title)}</div>
-            <div class="topic-meta">${escapeHtml(topic.series)} · ${statusLabels[topic.status] || "Ideia"}</div>
-          </div>
-          <div class="topic-actions">
-            ${renderStatusButton(topic, "idea")}
-            ${renderStatusButton(topic, "research")}
-            ${renderStatusButton(topic, "record")}
-            ${renderStatusButton(topic, "done")}
-            <button class="small-button" type="button" data-topic-delete="${topic.id}">Remover</button>
-          </div>
-        </article>
-      `;
-    })
+    .map((topic, index) => renderTopicRow(topic, index))
     .join("");
 
-  list.querySelectorAll("[data-topic-status]").forEach((button) => {
+  list.querySelectorAll("[data-topic-toggle]").forEach((button) => {
     button.addEventListener("click", () => {
-      const topic = state.topics.find((item) => item.id === button.dataset.topicId);
+      const topic = state.topics.find((item) => item.id === button.dataset.topicToggle);
       if (!topic) return;
-      topic.status = button.dataset.topicStatus;
+      topic.status = topic.status === "done" ? "pending" : "done";
       persist();
       renderTopics();
     });
@@ -141,9 +139,28 @@ function renderTopics() {
   });
 }
 
-function renderStatusButton(topic, status) {
-  const active = topic.status === status ? ' aria-current="true"' : "";
-  return `<button class="small-button" type="button" data-topic-id="${topic.id}" data-topic-status="${status}"${active}>${statusLabels[status]}</button>`;
+function renderTopicRow(topic, index) {
+  const isDone = topic.status === "done";
+  const statusLabel = statusLabels[topic.status] || statusLabels.pending;
+  const actionLabel = isDone ? "Reabrir" : "Marcar feito";
+  const position = String(index + 1).padStart(2, "0");
+
+  return `
+    <article class="topic-row${isDone ? " is-done" : ""}">
+      <button class="topic-check" type="button" data-topic-toggle="${topic.id}" aria-pressed="${isDone}" aria-label="${isDone ? "Reabrir tema" : "Marcar tema como feito"}">
+        <span></span>
+      </button>
+      <div class="topic-main">
+        <div class="topic-kicker">#${position} · ${escapeHtml(topic.series)}</div>
+        <div class="topic-title">${escapeHtml(topic.title)}</div>
+      </div>
+      <span class="topic-status ${isDone ? "done" : "pending"}">${statusLabel}</span>
+      <div class="topic-actions">
+        <button class="small-button" type="button" data-topic-toggle="${topic.id}">${actionLabel}</button>
+        <button class="small-button danger" type="button" data-topic-delete="${topic.id}">Remover</button>
+      </div>
+    </article>
+  `;
 }
 
 document.querySelectorAll("[data-topic-filter]").forEach((button) => {
@@ -164,7 +181,7 @@ document.querySelector("#topicForm").addEventListener("submit", (event) => {
     id: crypto.randomUUID(),
     title,
     series: detectSeries(title),
-    status: "idea"
+    status: "pending"
   });
   input.value = "";
   persist();

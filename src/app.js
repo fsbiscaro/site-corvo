@@ -179,11 +179,69 @@ function detectSeries(title) {
   return "Temas";
 }
 
-document.querySelector("#cardForm").addEventListener("submit", async (event) => {
+const cardForm = document.querySelector("#cardForm");
+const cardInput = document.querySelector("#cardName");
+const cardSuggestions = document.querySelector("#cardSuggestions");
+let suggestionTimer = 0;
+let suggestionAbortController = null;
+let suggestionCards = [];
+let lastSuggestionQuery = "";
+
+cardForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const name = document.querySelector("#cardName").value.trim();
+  const name = cardInput.value.trim();
   if (!name) return;
+
+  const canUseSuggestion = cardSuggestions.classList.contains("open") && suggestionCards.length && lastSuggestionQuery === normalizeQuery(name);
+  if (canUseSuggestion) {
+    selectSuggestedCard(suggestionCards[0]);
+    return;
+  }
+
+  hideCardSuggestions();
   await searchCard(name);
+});
+
+cardInput.addEventListener("input", () => {
+  const query = cardInput.value.trim();
+  window.clearTimeout(suggestionTimer);
+
+  if (query.length < 2) {
+    hideCardSuggestions();
+    return;
+  }
+
+  suggestionTimer = window.setTimeout(() => fetchCardSuggestions(query), 220);
+});
+
+cardInput.addEventListener("focus", () => {
+  const query = cardInput.value.trim();
+  if (query.length >= 2 && normalizeQuery(query) !== lastSuggestionQuery) {
+    fetchCardSuggestions(query);
+  } else if (suggestionCards.length) {
+    renderCardSuggestions(suggestionCards, query);
+  }
+});
+
+cardInput.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    hideCardSuggestions();
+  }
+});
+
+cardSuggestions.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-card-id]");
+  if (!option) return;
+
+  const card = suggestionCards.find((item) => item.id === option.dataset.cardId);
+  if (!card) return;
+  selectSuggestedCard(card);
+});
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#cardForm")) {
+    hideCardSuggestions();
+  }
 });
 
 document.querySelector("#cardResult").addEventListener("click", async (event) => {
@@ -206,6 +264,126 @@ document.querySelector("#cardResult").addEventListener("click", async (event) =>
   }
 });
 
+async function fetchCardSuggestions(query) {
+  if (suggestionAbortController) {
+    suggestionAbortController.abort();
+  }
+
+  suggestionAbortController = new AbortController();
+  lastSuggestionQuery = normalizeQuery(query);
+  suggestionCards = [];
+  renderSuggestionNote("Procurando versões...");
+
+  const params = new URLSearchParams({
+    q: `name:"${escapeScryfallQuery(query)}"`,
+    unique: "prints",
+    order: "released",
+    dir: "desc",
+    include_extras: "false"
+  });
+
+  try {
+    const response = await fetch(`https://api.scryfall.com/cards/search?${params.toString()}`, {
+      headers: { Accept: "application/json" },
+      signal: suggestionAbortController.signal
+    });
+
+    if (!response.ok) {
+      suggestionCards = [];
+      renderSuggestionNote("Nenhuma versão encontrada.");
+      return;
+    }
+
+    const data = await response.json();
+    if (lastSuggestionQuery !== normalizeQuery(cardInput.value.trim())) return;
+
+    suggestionCards = (data.data || []).slice(0, 12);
+    renderCardSuggestions(suggestionCards, query);
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    suggestionCards = [];
+    renderSuggestionNote("Não consegui consultar as sugestões agora.");
+  }
+}
+
+function renderCardSuggestions(cards, query) {
+  if (!cards.length) {
+    renderSuggestionNote(`Nenhuma versão encontrada para "${query}".`);
+    return;
+  }
+
+  cardSuggestions.innerHTML = cards
+    .map((card) => {
+      const image = getCardImage(card, "small") || getCardImage(card, "normal") || "";
+      const setCode = (card.set || "").toUpperCase();
+      const setLine = formatSuggestionSet(card);
+      const releaseYear = card.released_at ? card.released_at.slice(0, 4) : "";
+      const rarity = card.rarity ? capitalize(card.rarity) : "";
+      const detailLine = [setLine, releaseYear, rarity].filter(Boolean).join(" · ");
+
+      return `
+        <button class="card-suggestion" type="button" role="option" aria-selected="false" data-card-id="${escapeHtml(card.id)}">
+          ${image ? `<img class="suggestion-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" />` : '<span class="suggestion-thumb suggestion-thumb-empty"></span>'}
+          <span class="suggestion-copy">
+            <strong>${escapeHtml(card.name)}</strong>
+            <span>${escapeHtml(detailLine || "Edição não identificada")}</span>
+          </span>
+          <span class="suggestion-code">${escapeHtml(setCode)}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  openCardSuggestions();
+}
+
+function renderSuggestionNote(text) {
+  cardSuggestions.innerHTML = `<div class="suggestion-note">${escapeHtml(text)}</div>`;
+  openCardSuggestions();
+}
+
+function selectSuggestedCard(card) {
+  cardInput.value = card.name;
+  hideCardSuggestions();
+  renderCard(card);
+  setTransientStatus("Carta selecionada");
+}
+
+function openCardSuggestions() {
+  cardSuggestions.classList.add("open");
+  cardInput.setAttribute("aria-expanded", "true");
+}
+
+function hideCardSuggestions() {
+  window.clearTimeout(suggestionTimer);
+  if (suggestionAbortController) {
+    suggestionAbortController.abort();
+    suggestionAbortController = null;
+  }
+  cardSuggestions.classList.remove("open");
+  cardSuggestions.innerHTML = "";
+  suggestionCards = [];
+  cardInput.setAttribute("aria-expanded", "false");
+}
+
+function formatSuggestionSet(card) {
+  const setName = card.set_name || "Coleção desconhecida";
+  const collector = card.collector_number ? `#${card.collector_number}` : "";
+  return [setName, collector].filter(Boolean).join(" ");
+}
+
+function normalizeQuery(value) {
+  return value.trim().toLowerCase();
+}
+
+function escapeScryfallQuery(value) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 async function searchCard(name) {
   const result = document.querySelector("#cardResult");
   result.innerHTML = '<div class="empty-state">Buscando...</div>';
@@ -226,6 +404,7 @@ function renderCard(card) {
   const legality = card.legalities?.commander || "unknown";
   const ligaSearch = `https://www.ligamagic.com.br/?view=cards/search&card=${encodeURIComponent(card.name)}`;
   const downloads = getCardDownloads(card);
+  const setDescription = [card.set_name, card.set ? card.set.toUpperCase() : "", card.collector_number ? `#${card.collector_number}` : ""].filter(Boolean).join(" · ");
 
   document.querySelector("#cardResult").innerHTML = `
     <div class="card-display">
@@ -248,6 +427,10 @@ function renderCard(card) {
           <dd>${escapeHtml(card.mana_cost || "Sem custo")}</dd>
           <dt>Tipo</dt>
           <dd>${escapeHtml(card.type_line || "")}</dd>
+          <dt>Edição</dt>
+          <dd>${escapeHtml(setDescription || "N/D")}</dd>
+          <dt>Lançamento</dt>
+          <dd>${escapeHtml(card.released_at || "N/D")}</dd>
           <dt>Texto</dt>
           <dd>${escapeHtml(oracle).replace(/\n/g, "<br>")}</dd>
           <dt>Commander</dt>
@@ -270,11 +453,13 @@ function getCardImage(card, size) {
 }
 
 function getCardDownloads(card) {
+  const baseName = buildCardFileBase(card);
+
   if (card.image_uris?.png) {
     return [{
       label: "Baixar PNG alta",
       url: card.image_uris.png,
-      fileName: `${sanitizeFileName(card.name)}.png`
+      fileName: `${baseName}.png`
     }];
   }
 
@@ -283,8 +468,13 @@ function getCardDownloads(card) {
     .map((face, index) => ({
       label: index === 0 ? "Baixar frente PNG" : "Baixar verso PNG",
       url: face.image_uris.png,
-      fileName: `${sanitizeFileName(card.name)}-${index + 1}-${sanitizeFileName(face.name)}.png`
+      fileName: `${baseName}-${index + 1}-${sanitizeFileName(face.name)}.png`
     }));
+}
+
+function buildCardFileBase(card) {
+  const printCode = [card.set, card.collector_number].filter(Boolean).join("-");
+  return sanitizeFileName(printCode ? `${card.name}-${printCode}` : card.name);
 }
 
 async function downloadCardImage(url, fileName) {

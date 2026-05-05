@@ -110,13 +110,16 @@
           </div>
         </div>
 
-        <form class="search-strip reveal" id="cardForm">
-          <input id="cardName" type="search" placeholder="Digite o nome da carta para baixar o PNG" required />
+        <form class="search-strip reveal" id="cardForm" autocomplete="off">
+          <div class="card-search-field">
+            <input id="cardName" type="search" placeholder="Digite o nome da carta ou parte dele" required aria-controls="cardSuggestions" aria-expanded="false" />
+            <div class="card-suggestions" id="cardSuggestions" role="listbox" aria-label="Sugestões de cartas"></div>
+          </div>
           <button class="primary-action" type="submit">Buscar</button>
         </form>
 
         <div class="card-result reveal" id="cardResult" aria-live="polite">
-          <div class="empty-state">Digite o nome da carta. A imagem em alta e o botão de download aparecem aqui.</div>
+          <div class="empty-state">Digite o nome da carta. As versões aparecem como dicas, e a imagem em alta surge quando você escolhe.</div>
         </div>
       </section>
 

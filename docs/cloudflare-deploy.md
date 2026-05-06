@@ -22,19 +22,26 @@ Guarde o `database_id` retornado.
 npx wrangler d1 execute site-corvo --file db/schema.sql
 ```
 
-## 3. Criar o admin inicial
+## 3. Criar o admin inicial do jeito facil
 
-Gere o SQL:
+No Cloudflare Pages, configure estas variaveis de ambiente:
+
+- `CORVO_ADMIN_EMAIL`: email do admin.
+- `CORVO_ADMIN_PASSWORD`: senha inicial do admin.
+
+Quando esse email fizer login pela primeira vez, o backend cria automaticamente o usuario `admin` no D1 e salva a senha com hash.
+
+Depois do primeiro login funcionar, remova `CORVO_ADMIN_PASSWORD` das variaveis do Cloudflare ou troque a senha por outra que nao tenha sido compartilhada.
+
+### Alternativa manual
+
+Se quiser gerar SQL manualmente:
 
 ```bash
 node scripts/create-password-hash.mjs "uma senha forte" "seu-email@dominio.com" "Adm Corvo"
 ```
 
-Copie o `INSERT` gerado e rode no D1:
-
-```bash
-npx wrangler d1 execute site-corvo --command "COLE_O_INSERT_AQUI"
-```
+Depois rode o `INSERT` gerado no console do D1.
 
 ## 4. Configurar o Pages
 

@@ -38,7 +38,8 @@ async function login(request, env) {
   const password = String(body.password || "");
   if (!email || !password) return json({ error: "Informe email e senha." }, { status: 400 });
 
-  const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+  let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+  if (!user) user = await maybeBootstrapAdmin(env, email, password);
   if (!user) return json({ error: "Login ou senha invalido." }, { status: 401 });
 
   const hash = await hashPassword(password, user.password_salt);
@@ -60,6 +61,28 @@ async function login(request, env) {
   });
 }
 
+
+async function maybeBootstrapAdmin(env, email, password) {
+  const bootstrapEmail = normalizeEmail(env.CORVO_ADMIN_EMAIL);
+  const bootstrapPassword = String(env.CORVO_ADMIN_PASSWORD || "");
+  if (!bootstrapEmail || !bootstrapPassword) return null;
+  if (email !== bootstrapEmail || password !== bootstrapPassword) return null;
+
+  const existingAdmin = await env.DB.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").first();
+  if (existingAdmin) return null;
+
+  const now = new Date().toISOString();
+  const salt = randomHex(16);
+  const hash = await hashPassword(password, salt);
+  const id = crypto.randomUUID();
+
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, display_name, role, plan, plan_status, catarse_tier, paid_until, password_salt, password_hash, created_at, updated_at)
+     VALUES (?, ?, ?, 'admin', 'corvo', 'active', 'admin', '', ?, ?, ?, ?)`
+  ).bind(id, email, "Adm Corvo", salt, hash, now, now).run();
+
+  return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+}
 async function logout(request, env) {
   assertDb(env);
   const token = getCookie(request, SESSION_COOKIE);

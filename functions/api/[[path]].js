@@ -1,6 +1,6 @@
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
-const PASSWORD_ITERATIONS = 210000;
+const PASSWORD_ITERATIONS = 100000;
 
 const ROLE_FEATURES = {
   admin: ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"],
@@ -39,7 +39,7 @@ async function health(env) {
   const payload = {
     ok: true,
     name: "Grimorio do Corvo API",
-    version: "2026-05-06.3",
+    version: "2026-05-06.4",
     dbConfigured: Boolean(env.DB),
     adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
     schemaReady: false

@@ -7,3 +7,6 @@ Thumbs.db
 *.log
 docs/preview-*.png
 
+
+wrangler.toml
+.wrangler/

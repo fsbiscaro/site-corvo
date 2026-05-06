@@ -1,0 +1,9 @@
+# Copie este arquivo para wrangler.toml quando for configurar o Cloudflare Pages localmente.
+name = "site-corvo"
+compatibility_date = "2026-05-06"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "site-corvo"
+database_id = "COLE_AQUI_O_DATABASE_ID_DO_D1"

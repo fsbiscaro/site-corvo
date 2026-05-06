@@ -1,25 +1,66 @@
-# Grimorio do Corvo - Central de Conteudo MTG
+# Grimorio do Corvo - Central Criativa MTG
 
-Site para organizar a producao de videos do canal Grimorio do Corvo.
+Site e plataforma do canal Grimorio do Corvo para organizar conteudo e entregar ferramentas para apoiadores.
 
-## Modulos iniciais
+## O que ja existe
 
-- Gerador de roteiro com estrutura para videos de Magic: The Gathering.
-- Checklist de temas e fluxo editorial.
-- Busca de lore para personagens e planos.
-- Procurador de cartas usando a API publica do Scryfall.
-- Analisador inicial de decklists.
+- Home visual do Grimorio do Corvo.
+- Painel editorial privado com temas, status e calendario de publicacao.
+- Procurador de cartas com busca em portugues/ingles via Scryfall.
+- Analisador de decklists com leitura estruturada.
+- Backend Cloudflare Pages Functions com login, sessoes e niveis de acesso.
+- Banco Cloudflare D1 para usuarios, sessoes e historico de analises.
+- Leitura opcional com IA via OpenAI, sem expor chave no navegador.
 
-## Como abrir
+## Perfis
 
-Abra o arquivo `index.html` no navegador.
+- `admin`: acesso total ao sistema do Corvo, incluindo Temas, Cartas e Decks.
+- `member`: acesso ao produto para apoiadores, com foco no Analisador de Decks.
+- `guest`: ve a entrada do produto e precisa fazer login para usar ferramentas pagas.
 
-Como o projeto e estatico, nao precisa instalar dependencias para testar a primeira versao.
+## Desenvolvimento local simples
 
-## Proximos passos sugeridos
+Abra `index.html` no navegador.
 
-- Criar login e banco de dados para salvar ideias, roteiros e decks.
-- Conectar um modelo de IA para gerar roteiros automaticamente.
-- Adicionar integracao com YouTube Studio.
-- Salvar historico de buscas de cartas e lore.
-- Publicar no GitHub Pages.
+Sem backend disponivel, o frontend entra em modo `Adm local` para voce continuar usando o site atual enquanto a migracao para Cloudflare nao termina.
+
+## Backend Cloudflare
+
+O backend fica em `functions/api/[[path]].js` e foi pensado para Cloudflare Pages gratuito com D1.
+
+Principais rotas:
+
+- `GET /api/health`
+- `GET /api/auth/me`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `POST /api/decks/analyze`
+- `GET /api/admin/users`
+- `POST /api/admin/users`
+
+Veja o guia completo em `docs/cloudflare-deploy.md`.
+
+## IA
+
+Configure as variaveis no Cloudflare Pages:
+
+- `OPENAI_API_KEY`: chave da OpenAI.
+- `OPENAI_MODEL`: opcional. Padrao atual do projeto: `gpt-5`.
+
+Se a chave nao existir, a analise continua funcionando com heuristicas de deck.
+
+## Banco
+
+O schema esta em `db/schema.sql`.
+
+Para criar o primeiro admin, gere o SQL com:
+
+```bash
+node scripts/create-password-hash.mjs "sua senha forte" "seu-email@dominio.com" "Adm Corvo"
+```
+
+Depois execute o SQL gerado no D1.
+
+## Publicacao atual
+
+O projeto ainda pode ser publicado no GitHub Pages como site visual. Para login real e IA protegida, publique no Cloudflare Pages com Functions e D1.

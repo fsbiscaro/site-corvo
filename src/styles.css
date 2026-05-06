@@ -1694,6 +1694,10 @@ pre {
   cursor: not-allowed;
 }
 
+.auth-modal[hidden] {
+  display: none !important;
+}
+
 .auth-modal {
   position: fixed;
   inset: 0;

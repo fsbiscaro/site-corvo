@@ -94,12 +94,18 @@ function openAuthModal() {
   const modal = document.querySelector("#authModal");
   if (!modal) return;
   modal.hidden = false;
+  modal.removeAttribute("hidden");
+  modal.classList.add("is-open");
   document.querySelector("#loginEmail")?.focus();
 }
 
-function closeAuthModal() {
+function closeAuthModal({ resetForm = false } = {}) {
   const modal = document.querySelector("#authModal");
-  if (modal) modal.hidden = true;
+  if (!modal) return;
+  modal.classList.remove("is-open");
+  modal.hidden = true;
+  modal.setAttribute("hidden", "");
+  if (resetForm) document.querySelector("#loginForm")?.reset();
 }
 
 async function login(event) {
@@ -120,8 +126,10 @@ async function login(event) {
     if (!response.ok) throw new Error(payload.error || "Nao foi possivel entrar.");
     setAuthState(payload);
     setAuthFeedback("Entrada liberada.", "ok");
-    closeAuthModal();
+    closeAuthModal({ resetForm: true });
     applyAccess();
+    setTransientStatus("Entrada liberada");
+    if (hasFeature("temas")) setView("temas");
   } catch (error) {
     setAuthFeedback(error.message, "error");
     if (feedback) feedback.classList.add("is-error");

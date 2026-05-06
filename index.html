@@ -111,6 +111,23 @@
           </div>
         </div>
 
+        <section class="admin-panel reveal" id="adminMembersPanel" data-feature="admin" aria-label="Gerenciar membros">
+          <div class="admin-panel-header">
+            <div>
+              <p class="eyebrow">Painel do Corvo</p>
+              <h3>Membros Catarse</h3>
+              <p>Libere acesso ao analisador para apoiadores enquanto a integração automática não chega.</p>
+            </div>
+          </div>
+          <form class="member-form" id="memberForm">
+            <input id="memberEmail" type="email" placeholder="Email do membro" required />
+            <input id="memberName" type="text" placeholder="Nome" required />
+            <input id="memberPassword" type="text" placeholder="Senha inicial" required />
+            <input id="memberTier" type="text" placeholder="Tier Catarse" value="R$15" />
+            <button class="primary-action" type="submit">Liberar acesso</button>
+          </form>
+          <div class="member-list" id="memberList" aria-live="polite"></div>
+        </section>
         <section class="topic-board scheduler-board reveal" aria-label="Calendário editorial">
           <div class="topic-board-header">
             <div>

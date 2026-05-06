@@ -48,6 +48,7 @@ function applyAccess() {
   if (authLogout) authLogout.hidden = !authState.isAuthenticated || authState.offline;
 
   updateDeckGate();
+  renderAdminMembers();
 }
 
 async function initAuth() {
@@ -77,6 +78,7 @@ function bindAuthControls() {
     if (event.target.id === "authModal") closeAuthModal();
   });
   document.querySelector("#loginForm")?.addEventListener("submit", login);
+  document.querySelector("#memberForm")?.addEventListener("submit", createMember);
 }
 
 function setAuthState(payload) {
@@ -218,6 +220,81 @@ function renderAiText(text) {
     .join("");
 }
 
+
+async function renderAdminMembers() {
+  const list = document.querySelector("#memberList");
+  const panel = document.querySelector("#adminMembersPanel");
+  if (!list || !panel || !hasFeature("admin")) return;
+
+  if (authState.offline) {
+    list.innerHTML = '<div class="empty-state compact">Cadastro real de membros fica ativo quando o site estiver no Cloudflare com D1.</div>';
+    return;
+  }
+
+  list.innerHTML = '<div class="empty-state compact">Carregando membros...</div>';
+  try {
+    const response = await fetch(`${API_BASE}/admin/users`, { headers: { Accept: "application/json" } });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Nao consegui carregar os membros.");
+    const members = payload.users || [];
+    if (!members.length) {
+      list.innerHTML = '<div class="empty-state compact">Nenhum membro cadastrado ainda.</div>';
+      return;
+    }
+    list.innerHTML = members.map(renderMemberRow).join("");
+  } catch (error) {
+    list.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderMemberRow(member) {
+  return `
+    <article class="member-row">
+      <div>
+        <strong>${escapeHtml(member.display_name || member.email)}</strong>
+        <span>${escapeHtml(member.email)}</span>
+      </div>
+      <span class="access-chip ${member.plan_status === "active" ? "is-open" : ""}">${escapeHtml(member.role)} · ${escapeHtml(member.plan_status)}</span>
+    </article>
+  `;
+}
+
+async function createMember(event) {
+  event.preventDefault();
+  if (authState.offline) {
+    document.querySelector("#memberList").innerHTML = '<p class="error-text">Cadastro real precisa do Cloudflare D1 ativo.</p>';
+    return;
+  }
+
+  const button = event.currentTarget.querySelector("button[type='submit']");
+  button.disabled = true;
+  button.textContent = "Liberando...";
+  try {
+    const response = await fetch(`${API_BASE}/admin/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        email: document.querySelector("#memberEmail").value,
+        displayName: document.querySelector("#memberName").value,
+        password: document.querySelector("#memberPassword").value,
+        role: "member",
+        plan: "catarse",
+        planStatus: "active",
+        catarseTier: document.querySelector("#memberTier").value
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Nao consegui criar o membro.");
+    event.currentTarget.reset();
+    document.querySelector("#memberTier").value = "R$15";
+    await renderAdminMembers();
+  } catch (error) {
+    document.querySelector("#memberList").innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Liberar acesso";
+  }
+}
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {

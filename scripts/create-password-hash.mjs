@@ -1,4 +1,4 @@
-import { pbkdf2Sync, randomBytes } from "node:crypto";
+import { pbkdf2Sync, randomBytes, randomUUID } from "node:crypto";
 
 const password = process.argv[2];
 const email = process.argv[3] || "seu-email@exemplo.com";
@@ -12,7 +12,7 @@ if (!password) {
 const salt = randomBytes(16).toString("hex");
 const hash = pbkdf2Sync(password, Buffer.from(salt, "hex"), 210000, 32, "sha256").toString("hex");
 const now = new Date().toISOString();
-const id = crypto.randomUUID();
+const id = randomUUID();
 const safeName = displayName.replaceAll("'", "''");
 
 console.log("Salt:", salt);

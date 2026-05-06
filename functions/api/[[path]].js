@@ -9,7 +9,10 @@ const ROLE_FEATURES = {
 };
 
 export async function onRequest(context) {
-  const { request, env } = context;
+  return handleApiRequest(context.request, context.env);
+}
+
+export async function handleApiRequest(request, env) {
   const url = new URL(request.url);
   const route = url.pathname.replace(/^\/api\/?/, "") || "health";
 

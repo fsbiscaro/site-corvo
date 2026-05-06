@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "site-corvo",
+  "main": "./worker.js",
+  "compatibility_date": "2026-05-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "site-corvo",
+      "database_id": "1a012621-48ac-4ea1-b28f-aa614ffc8b8c"
+    }
+  ]
+}

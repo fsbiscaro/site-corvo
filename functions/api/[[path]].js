@@ -19,21 +19,45 @@ export async function handleApiRequest(request, env) {
   if (request.method === "OPTIONS") return emptyResponse(204);
 
   try {
-    if (request.method === "GET" && route === "health") return json({ ok: true, name: "Grimorio do Corvo API", version: "2026-05-06.2", dbConfigured: Boolean(env.DB), adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD) });
-    if (request.method === "POST" && route === "auth/login") return login(request, env);
-    if (request.method === "POST" && route === "auth/logout") return logout(request, env);
-    if (request.method === "GET" && route === "auth/me") return me(request, env);
-    if (request.method === "POST" && route === "decks/analyze") return analyzeDeck(request, env);
-    if (request.method === "GET" && route === "admin/users") return listUsers(request, env);
-    if (request.method === "POST" && route === "admin/users") return createUser(request, env);
+    if (request.method === "GET" && route === "health") return health(env);
+    if (request.method === "POST" && route === "auth/login") return await login(request, env);
+    if (request.method === "POST" && route === "auth/logout") return await logout(request, env);
+    if (request.method === "GET" && route === "auth/me") return await me(request, env);
+    if (request.method === "POST" && route === "decks/analyze") return await analyzeDeck(request, env);
+    if (request.method === "GET" && route === "admin/users") return await listUsers(request, env);
+    if (request.method === "POST" && route === "admin/users") return await createUser(request, env);
 
     return json({ error: "Rota nao encontrada." }, { status: 404 });
   } catch (error) {
     console.error(error);
-    return json({ error: "O grimorio tropeçou na propria magia. Tente de novo." }, { status: 500 });
+    return json({ error: "O grimorio tropeçou na propria magia. Tente de novo.", detail: String(error.message || error).slice(0, 180) }, { status: 500 });
   }
 }
 
+
+async function health(env) {
+  const payload = {
+    ok: true,
+    name: "Grimorio do Corvo API",
+    version: "2026-05-06.3",
+    dbConfigured: Boolean(env.DB),
+    adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
+    schemaReady: false
+  };
+
+  if (env.DB) {
+    try {
+      await env.DB.prepare("SELECT 1 FROM users LIMIT 1").first();
+      await env.DB.prepare("SELECT 1 FROM sessions LIMIT 1").first();
+      payload.schemaReady = true;
+    } catch (error) {
+      payload.schemaReady = false;
+      payload.schemaError = String(error.message || error).slice(0, 160);
+    }
+  }
+
+  return json(payload);
+}
 async function login(request, env) {
   assertDb(env);
   const body = await readJson(request);

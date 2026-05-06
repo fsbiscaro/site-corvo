@@ -27,9 +27,23 @@ function hasFeature(feature) {
 }
 
 function canOpenView(viewId) {
+  if (!authState.isAuthenticated && !authState.offline) return viewId === "dashboard";
   if (viewId === "dashboard" || viewId === "decks") return true;
   const feature = viewFeatures[viewId];
   return !feature || hasFeature(feature);
+}
+
+function routeAuthenticatedUser() {
+  if (!authState.isAuthenticated) return;
+  if (hasFeature("admin")) {
+    setView("temas");
+    return;
+  }
+  if (hasFeature("decks")) {
+    setView("decks");
+    return;
+  }
+  setView("dashboard");
 }
 
 function applyAccess() {
@@ -68,11 +82,13 @@ async function initAuth() {
     });
   }
   applyAccess();
+  if (authState.isAuthenticated) routeAuthenticatedUser();
+  else if (!authState.offline) openAuthModal({ required: true });
 }
 
 function bindAuthControls() {
   document.querySelector("#authOpen")?.addEventListener("click", openAuthModal);
-  document.querySelector("#authClose")?.addEventListener("click", closeAuthModal);
+  document.querySelector("#authClose")?.addEventListener("click", () => closeAuthModal());
   document.querySelector("#authLogout")?.addEventListener("click", logout);
   document.querySelector("#authModal")?.addEventListener("click", (event) => {
     if (event.target.id === "authModal") closeAuthModal();
@@ -89,20 +105,26 @@ function setAuthState(payload) {
   authState.offline = Boolean(payload.offline);
 }
 
-function openAuthModal() {
+function openAuthModal({ required = false } = {}) {
   if (authState.offline) return;
   const modal = document.querySelector("#authModal");
   if (!modal) return;
   modal.hidden = false;
   modal.removeAttribute("hidden");
   modal.classList.add("is-open");
+  modal.classList.toggle("is-required", required);
   document.querySelector("#loginEmail")?.focus();
 }
 
-function closeAuthModal({ resetForm = false } = {}) {
+function closeAuthModal({ resetForm = false, force = false } = {}) {
   const modal = document.querySelector("#authModal");
   if (!modal) return;
-  modal.classList.remove("is-open");
+  if (!force && modal.classList.contains("is-required") && !authState.isAuthenticated) {
+    setAuthFeedback("Entre para acessar o Grimorio.", "error");
+    document.querySelector("#loginEmail")?.focus();
+    return;
+  }
+  modal.classList.remove("is-open", "is-required");
   modal.hidden = true;
   modal.setAttribute("hidden", "");
   if (resetForm) document.querySelector("#loginForm")?.reset();
@@ -126,10 +148,10 @@ async function login(event) {
     if (!response.ok) throw new Error(payload.error || "Nao foi possivel entrar.");
     setAuthState(payload);
     setAuthFeedback("Entrada liberada.", "ok");
-    closeAuthModal({ resetForm: true });
+    closeAuthModal({ resetForm: true, force: true });
     applyAccess();
+    routeAuthenticatedUser();
     setTransientStatus("Entrada liberada");
-    if (hasFeature("temas")) setView("temas");
   } catch (error) {
     setAuthFeedback(error.message, "error");
     if (feedback) feedback.classList.add("is-error");
@@ -141,6 +163,7 @@ async function logout() {
   setAuthState({ isAuthenticated: false, user: null, features: ["dashboard"] });
   applyAccess();
   setView("dashboard");
+  openAuthModal({ required: true });
 }
 
 function setAuthFeedback(text, tone = "") {

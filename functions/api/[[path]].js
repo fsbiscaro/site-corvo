@@ -135,6 +135,8 @@ async function analyzeDeck(request, env) {
 
   const cards = await fetchCards(entries);
   const report = buildDeckReport(entries, cards);
+  report.aiText = await generateAiDeckReading(env, report, entries);
+  report.aiEnabled = Boolean(report.aiText);
   await saveDeckAnalysis(env, user.id, decklist, report);
   return json(report);
 }
@@ -321,6 +323,62 @@ function buildCorvoNote(advice, averageManaValue, lands) {
   return `${opening} ${tempo} ${mana} Comece pelas recomendacoes de consistencia antes de comprar cartas caras.`;
 }
 
+
+async function generateAiDeckReading(env, report, entries) {
+  if (!env.OPENAI_API_KEY) return "";
+
+  const model = env.OPENAI_MODEL || "gpt-5";
+  const compactDeck = entries.slice(0, 120).map((entry) => `${entry.quantity} ${entry.name}`).join("\n");
+  const prompt = [
+    "Analise este deck de Magic: The Gathering para um apoiador do Grimorio do Corvo.",
+    "Use portugues do Brasil, tom direto e levemente tematico, sem exagerar.",
+    "Entregue 4 blocos curtos: Diagnostico, O que melhorar primeiro, Cortes/ajustes possiveis, Upgrade por prioridade.",
+    "Nao invente precos. Se faltar contexto do comandante, diga como isso afeta a leitura.",
+    "Resumo tecnico:",
+    JSON.stringify(report, null, 2),
+    "Decklist:",
+    compactDeck
+  ].join("\n\n");
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model,
+        reasoning: { effort: "low" },
+        instructions: "Voce e o analisador de decks do Grimorio do Corvo. Seja util, claro e honesto sobre incertezas.",
+        input: prompt
+      })
+    });
+
+    if (!response.ok) {
+      console.error("OpenAI error", response.status, await response.text());
+      return "";
+    }
+
+    const data = await response.json();
+    return extractOpenAiText(data).trim();
+  } catch (error) {
+    console.error("OpenAI unavailable", error);
+    return "";
+  }
+}
+
+function extractOpenAiText(data) {
+  if (typeof data.output_text === "string") return data.output_text;
+  const pieces = [];
+  for (const item of data.output || []) {
+    for (const content of item.content || []) {
+      if (content.type === "output_text" && content.text) pieces.push(content.text);
+      if (content.type === "text" && content.text) pieces.push(content.text);
+    }
+  }
+  return pieces.join("\n\n");
+}
 async function saveDeckAnalysis(env, userId, decklist, report) {
   if (!env.DB) return;
   await env.DB.prepare(

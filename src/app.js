@@ -195,6 +195,7 @@ async function analyzeDeckWithApi(decklist) {
 function renderDeckApiReport(report) {
   return `
     <blockquote class="corvo-note">${escapeHtml(report.corvoNote || "O grimorio terminou a leitura.")}</blockquote>
+    ${report.aiText ? `<h3>Leitura com IA</h3><div class="ai-reading">${renderAiText(report.aiText)}</div>` : ""}
     <h3>Resumo</h3>
     <dl class="deck-stats">
       <dt>Total</dt><dd>${report.summary.total} cartas na lista, ${report.summary.foundTotal} encontradas no Scryfall</dd>
@@ -209,6 +210,14 @@ function renderDeckApiReport(report) {
     <div class="deck-bars">${renderCurveBars(report.curve || {})}</div>
   `;
 }
+function renderAiText(text) {
+  return escapeHtml(text)
+    .split(/\n{2,}/)
+    .filter(Boolean)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {

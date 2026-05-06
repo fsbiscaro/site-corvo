@@ -19,7 +19,7 @@ export async function handleApiRequest(request, env) {
   if (request.method === "OPTIONS") return emptyResponse(204);
 
   try {
-    if (request.method === "GET" && route === "health") return json({ ok: true, name: "Grimorio do Corvo API" });
+    if (request.method === "GET" && route === "health") return json({ ok: true, name: "Grimorio do Corvo API", version: "2026-05-06.2", dbConfigured: Boolean(env.DB), adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD) });
     if (request.method === "POST" && route === "auth/login") return login(request, env);
     if (request.method === "POST" && route === "auth/logout") return logout(request, env);
     if (request.method === "GET" && route === "auth/me") return me(request, env);
@@ -67,9 +67,9 @@ async function login(request, env) {
 
 async function maybeBootstrapAdmin(env, email, password, currentUser = null) {
   const bootstrapEmail = normalizeEmail(env.CORVO_ADMIN_EMAIL);
-  const bootstrapPassword = String(env.CORVO_ADMIN_PASSWORD || "");
+  const bootstrapPassword = String(env.CORVO_ADMIN_PASSWORD || "").trim();
   if (!bootstrapEmail || !bootstrapPassword) return null;
-  if (email !== bootstrapEmail || password !== bootstrapPassword) return null;
+  if (email !== bootstrapEmail || password.trim() !== bootstrapPassword) return null;
 
   const now = new Date().toISOString();
   const salt = randomHex(16);

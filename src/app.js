@@ -11,7 +11,204 @@ const views = document.querySelectorAll(".view");
 const navItems = document.querySelectorAll("[data-view-target]");
 const saveStatus = document.querySelector("#saveStatus");
 const state = loadState();
+const API_BASE = "/api";
+const ALL_FEATURES = ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"];
+const viewFeatures = { temas: "temas", cartas: "card_search" };
+const authState = {
+  loading: true,
+  isAuthenticated: false,
+  user: null,
+  features: ["dashboard"],
+  offline: false
+};
 
+function hasFeature(feature) {
+  return authState.features.includes(feature);
+}
+
+function canOpenView(viewId) {
+  if (viewId === "dashboard" || viewId === "decks") return true;
+  const feature = viewFeatures[viewId];
+  return !feature || hasFeature(feature);
+}
+
+function applyAccess() {
+  document.querySelectorAll("[data-feature]").forEach((element) => {
+    const feature = element.dataset.feature;
+    element.hidden = Boolean(feature && !hasFeature(feature));
+  });
+
+  const activeView = document.querySelector(".view.active");
+  if (activeView && !canOpenView(activeView.id)) setView("dashboard");
+
+  const userLabel = authState.user?.displayName || authState.user?.email || "Entrar";
+  const authOpen = document.querySelector("#authOpen");
+  const authLogout = document.querySelector("#authLogout");
+  if (authOpen) authOpen.textContent = authState.isAuthenticated ? userLabel : "Entrar";
+  if (authLogout) authLogout.hidden = !authState.isAuthenticated || authState.offline;
+
+  updateDeckGate();
+}
+
+async function initAuth() {
+  bindAuthControls();
+  try {
+    const response = await fetch(`${API_BASE}/auth/me`, { headers: { Accept: "application/json" } });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) throw new Error("API indisponivel");
+    const payload = await response.json();
+    setAuthState(payload);
+  } catch {
+    setAuthState({
+      isAuthenticated: true,
+      user: { displayName: "Adm local", role: "admin" },
+      features: ALL_FEATURES,
+      offline: true
+    });
+  }
+  applyAccess();
+}
+
+function bindAuthControls() {
+  document.querySelector("#authOpen")?.addEventListener("click", openAuthModal);
+  document.querySelector("#authClose")?.addEventListener("click", closeAuthModal);
+  document.querySelector("#authLogout")?.addEventListener("click", logout);
+  document.querySelector("#authModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "authModal") closeAuthModal();
+  });
+  document.querySelector("#loginForm")?.addEventListener("submit", login);
+}
+
+function setAuthState(payload) {
+  authState.loading = false;
+  authState.isAuthenticated = Boolean(payload.isAuthenticated);
+  authState.user = payload.user || null;
+  authState.features = Array.isArray(payload.features) ? payload.features : ["dashboard"];
+  authState.offline = Boolean(payload.offline);
+}
+
+function openAuthModal() {
+  if (authState.offline) return;
+  const modal = document.querySelector("#authModal");
+  if (!modal) return;
+  modal.hidden = false;
+  document.querySelector("#loginEmail")?.focus();
+}
+
+function closeAuthModal() {
+  const modal = document.querySelector("#authModal");
+  if (modal) modal.hidden = true;
+}
+
+async function login(event) {
+  event.preventDefault();
+  const feedback = document.querySelector("#authFeedback");
+  setAuthFeedback("Abrindo o grimorio...", "ok");
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        email: document.querySelector("#loginEmail").value,
+        password: document.querySelector("#loginPassword").value
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Nao foi possivel entrar.");
+    setAuthState(payload);
+    setAuthFeedback("Entrada liberada.", "ok");
+    closeAuthModal();
+    applyAccess();
+  } catch (error) {
+    setAuthFeedback(error.message, "error");
+    if (feedback) feedback.classList.add("is-error");
+  }
+}
+
+async function logout() {
+  await fetch(`${API_BASE}/auth/logout`, { method: "POST", headers: { Accept: "application/json" } });
+  setAuthState({ isAuthenticated: false, user: null, features: ["dashboard"] });
+  applyAccess();
+  setView("dashboard");
+}
+
+function setAuthFeedback(text, tone = "") {
+  const feedback = document.querySelector("#authFeedback");
+  if (!feedback) return;
+  feedback.textContent = text;
+  feedback.classList.toggle("is-error", tone === "error");
+  feedback.classList.toggle("is-ok", tone === "ok");
+}
+
+function updateDeckGate() {
+  const canUseDeck = hasFeature("decks");
+  const gate = document.querySelector("#deckMemberGate");
+  const form = document.querySelector("#deckForm");
+  const chip = document.querySelector("#deckAccessChip");
+  if (gate) gate.hidden = canUseDeck;
+  if (form) {
+    form.classList.toggle("is-locked", !canUseDeck);
+    form.querySelectorAll("textarea, button[type='submit']").forEach((field) => {
+      field.disabled = !canUseDeck;
+    });
+  }
+  if (chip) {
+    chip.textContent = canUseDeck ? "Acesso liberado" : "Acesso de membro";
+    chip.classList.toggle("is-open", canUseDeck);
+  }
+  if (!canUseDeck && document.body.dataset.view === "decks") renderDeckLockedOutput();
+}
+
+function renderDeckLockedOutput() {
+  const output = document.querySelector("#deckOutput");
+  if (!output) return;
+  output.innerHTML = `
+    <h3>Ferramenta de membros</h3>
+    <p>O analisador completo fica liberado para apoiadores ativos. Entre com sua conta do Catarse para receber a leitura do deck.</p>
+  `;
+}
+
+async function analyzeDeckWithApi(decklist) {
+  const output = document.querySelector("#deckOutput");
+  output.innerHTML = "<p>Consultando o grimorio e lendo sua lista...</p>";
+
+  try {
+    const response = await fetch(`${API_BASE}/decks/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ decklist })
+    });
+    const report = await response.json();
+    if (response.status === 401) {
+      renderDeckLockedOutput();
+      openAuthModal();
+      return;
+    }
+    if (!response.ok) throw new Error(report.error || "Nao foi possivel analisar o deck agora.");
+    output.innerHTML = renderDeckApiReport(report);
+  } catch (error) {
+    output.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderDeckApiReport(report) {
+  return `
+    <blockquote class="corvo-note">${escapeHtml(report.corvoNote || "O grimorio terminou a leitura.")}</blockquote>
+    <h3>Resumo</h3>
+    <dl class="deck-stats">
+      <dt>Total</dt><dd>${report.summary.total} cartas na lista, ${report.summary.foundTotal} encontradas no Scryfall</dd>
+      <dt>Cores</dt><dd>${escapeHtml(report.summary.colors || "Incolor / nao identificado")}</dd>
+      <dt>Valor medio de mana</dt><dd>${escapeHtml(report.summary.averageManaValue ?? "-")}</dd>
+      <dt>Tipos</dt><dd>${formatObject(report.types || {})}</dd>
+      <dt>Funcoes</dt><dd>${formatObject(report.roles || {})}</dd>
+    </dl>
+    <h3>Prioridades do Corvo</h3>
+    <ul class="deck-advice">${(report.advice || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    <h3>Curva de mana</h3>
+    <div class="deck-bars">${renderCurveBars(report.curve || {})}</div>
+  `;
+}
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {
@@ -53,9 +250,11 @@ function setTransientStatus(text) {
 }
 
 function setView(viewId) {
+  if (!canOpenView(viewId)) viewId = "dashboard";
   views.forEach((view) => view.classList.toggle("active", view.id === viewId));
   navItems.forEach((item) => item.classList.toggle("active", item.dataset.viewTarget === viewId));
   document.body.dataset.view = viewId;
+  if (viewId === "decks") updateDeckGate();
   window.requestAnimationFrame(() => restartReveals(viewId));
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
@@ -78,6 +277,10 @@ navItems.forEach((item) => {
 
 document.querySelectorAll("[data-jump]").forEach((button) => {
   button.addEventListener("click", () => setView(button.dataset.jump));
+});
+
+document.querySelectorAll("[data-auth-open]").forEach((button) => {
+  button.addEventListener("click", openAuthModal);
 });
 
 function renderMetrics() {
@@ -901,12 +1104,21 @@ document.querySelector("#loadSampleDeck").addEventListener("click", () => {
 
 document.querySelector("#deckForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const lines = parseDecklist(document.querySelector("#deckInput").value);
+  const deckText = document.querySelector("#deckInput").value;
+  const lines = parseDecklist(deckText);
   if (!lines.length) {
     document.querySelector("#deckOutput").innerHTML = '<p class="error-text">Cole uma lista válida.</p>';
     return;
   }
-  await analyzeDeck(lines);
+
+  if (!hasFeature("decks")) {
+    renderDeckLockedOutput();
+    openAuthModal();
+    return;
+  }
+
+  if (authState.offline) await analyzeDeck(lines);
+  else await analyzeDeckWithApi(deckText);
 });
 
 function parseDecklist(text) {
@@ -1072,3 +1284,4 @@ function initVisualEffects() {
 renderMetrics();
 renderTopics();
 initVisualEffects();
+initAuth();

@@ -24,12 +24,16 @@
 
       <nav class="spell-tabs" aria-label="Capítulos">
         <button class="nav-item active" type="button" data-view-target="dashboard">Início</button>
-        <button class="nav-item" type="button" data-view-target="temas">Temas</button>
-        <button class="nav-item" type="button" data-view-target="cartas">Cartas</button>
+        <button class="nav-item" type="button" data-view-target="temas" data-feature="temas">Temas</button>
+        <button class="nav-item" type="button" data-view-target="cartas" data-feature="card_search">Cartas</button>
         <button class="nav-item" type="button" data-view-target="decks">Decks</button>
       </nav>
 
-      <a class="channel-link" href="https://www.youtube.com/@GrimoriodoCorvo" target="_blank" rel="noreferrer">YouTube</a>
+      <div class="nav-actions">
+        <a class="channel-link" href="https://www.youtube.com/@GrimoriodoCorvo" target="_blank" rel="noreferrer">YouTube</a>
+        <button class="auth-trigger" type="button" id="authOpen">Entrar</button>
+        <button class="auth-trigger ghost" type="button" id="authLogout" hidden>Sair</button>
+      </div>
     </header>
 
     <main>
@@ -64,11 +68,11 @@
         </div>
 
         <div class="portal-grid" aria-label="Ferramentas">
-          <button class="tool-tile reveal" type="button" data-jump="temas">
+          <button class="tool-tile reveal" type="button" data-jump="temas" data-feature="temas">
             <span>Temas</span>
             <strong>backlog, status, pauta</strong>
           </button>
-          <button class="tool-tile reveal" type="button" data-jump="cartas">
+          <button class="tool-tile reveal" type="button" data-jump="cartas" data-feature="card_search">
             <span>Cartas</span>
             <strong>Scryfall, LigaMagic, EDHREC</strong>
           </button>
@@ -79,7 +83,7 @@
         </div>
       </section>
 
-      <section class="view chapter-view" id="temas" aria-labelledby="temas-title">
+      <section class="view chapter-view" id="temas" aria-labelledby="temas-title" data-feature="temas">
         <div class="chapter-hero topics-hero">
           <div>
             <p class="eyebrow">Painel editorial</p>
@@ -157,7 +161,7 @@
         </section>
       </section>
 
-      <section class="view chapter-view" id="cartas" aria-labelledby="cartas-title">
+      <section class="view chapter-view" id="cartas" aria-labelledby="cartas-title" data-feature="card_search">
         <div class="chapter-hero">
           <div>
             <p class="eyebrow">Busca arcana</p>
@@ -184,11 +188,23 @@
             <p class="eyebrow">Mesa de alquimia</p>
             <h2 id="decks-title">Analisador de deck</h2>
           </div>
-          <button class="ghost-action" type="button" id="loadSampleDeck">Exemplo</button>
+          <div class="chapter-actions">
+            <span class="access-chip" id="deckAccessChip">Acesso de membro</span>
+            <button class="ghost-action" type="button" id="loadSampleDeck">Exemplo</button>
+          </div>
         </div>
 
+        <section class="access-gate reveal" id="deckMemberGate" hidden>
+          <div>
+            <p class="eyebrow">Area de membros</p>
+            <h3>Analisador liberado para apoiadores</h3>
+            <p>Cole sua decklist e receba uma leitura do Corvo com curva, base de mana, funcoes e prioridades de melhoria. Entre com uma conta ativa do Catarse para usar.</p>
+          </div>
+          <button class="primary-action" type="button" data-auth-open>Entrar como membro</button>
+        </section>
+
         <div class="spell-layout">
-          <form class="spell-form reveal" id="deckForm">
+          <form class="spell-form reveal" id="deckForm" data-deck-member-tool>
             <label>
               Decklist
               <textarea id="deckInput" rows="18" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Command Tower"></textarea>
@@ -202,6 +218,27 @@
         </div>
       </section>
     </main>
+
+    <div class="auth-modal" id="authModal" hidden>
+      <div class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <button class="auth-close" type="button" id="authClose" aria-label="Fechar login">X</button>
+        <p class="eyebrow">Acesso do Grimorio</p>
+        <h3 id="authTitle">Entrar no sistema</h3>
+        <p class="auth-copy">Use o login liberado para apoiadores do Catarse ou para o painel do Corvo.</p>
+        <form class="auth-form" id="loginForm">
+          <label>
+            Email
+            <input id="loginEmail" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Senha
+            <input id="loginPassword" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary-action full" type="submit">Entrar</button>
+        </form>
+        <p class="auth-feedback" id="authFeedback" aria-live="polite"></p>
+      </div>
+    </div>
 
     <div class="save-rune" aria-live="polite">
       <span class="status-dot"></span>

@@ -81,6 +81,49 @@
             <strong>curva, cores, funções</strong>
           </button>
         </div>
+        <section class="admin-panel user-admin-panel reveal" id="adminMembersPanel" data-feature="admin" aria-label="Gerenciar usuarios">
+          <div class="admin-panel-header">
+            <div>
+              <p class="eyebrow">Admin</p>
+              <h3>Usuarios do sistema</h3>
+            </div>
+          </div>
+          <form class="member-form user-form" id="memberForm">
+            <label>
+              <span>Email</span>
+              <input id="memberEmail" type="email" placeholder="email@exemplo.com" required />
+            </label>
+            <label>
+              <span>Nome</span>
+              <input id="memberName" type="text" placeholder="Nome do usuario" required />
+            </label>
+            <label>
+              <span>Perfil</span>
+              <select id="memberRole" required>
+                <option value="member">Membro</option>
+                <option value="admin">Administrador</option>
+                <option value="guest">Visitante</option>
+              </select>
+            </label>
+            <label>
+              <span>Status</span>
+              <select id="memberStatus" required>
+                <option value="active">Ativo</option>
+                <option value="inactive">Inativo</option>
+              </select>
+            </label>
+            <label>
+              <span>Senha inicial</span>
+              <input id="memberPassword" type="text" placeholder="Senha temporaria" required />
+            </label>
+            <label>
+              <span>Tier</span>
+              <input id="memberTier" type="text" placeholder="R$15" value="R$15" />
+            </label>
+            <button class="primary-action" type="submit">Criar usuario</button>
+          </form>
+          <div class="member-list" id="memberList" aria-live="polite"></div>
+        </section>
       </section>
 
       <section class="view chapter-view" id="temas" aria-labelledby="temas-title" data-feature="temas">
@@ -111,23 +154,7 @@
           </div>
         </div>
 
-        <section class="admin-panel reveal" id="adminMembersPanel" data-feature="admin" aria-label="Gerenciar membros">
-          <div class="admin-panel-header">
-            <div>
-              <p class="eyebrow">Painel do Corvo</p>
-              <h3>Membros Catarse</h3>
-              <p>Libere acesso ao analisador para apoiadores enquanto a integração automática não chega.</p>
-            </div>
-          </div>
-          <form class="member-form" id="memberForm">
-            <input id="memberEmail" type="email" placeholder="Email do membro" required />
-            <input id="memberName" type="text" placeholder="Nome" required />
-            <input id="memberPassword" type="text" placeholder="Senha inicial" required />
-            <input id="memberTier" type="text" placeholder="Tier Catarse" value="R$15" />
-            <button class="primary-action" type="submit">Liberar acesso</button>
-          </form>
-          <div class="member-list" id="memberList" aria-live="polite"></div>
-        </section>
+
         <section class="topic-board scheduler-board reveal" aria-label="Calendário editorial">
           <div class="topic-board-header">
             <div>

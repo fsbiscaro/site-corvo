@@ -1546,6 +1546,33 @@ pre {
 .member-form input {
   min-width: 0;
 }
+.user-admin-panel {
+  width: min(1180px, calc(100% - 48px));
+  margin: 24px auto 0;
+}
+
+.member-form.user-form {
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  align-items: end;
+}
+
+.member-form.user-form label {
+  min-width: 0;
+  gap: 7px;
+}
+
+.member-form.user-form label > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.member-form.user-form .primary-action {
+  min-height: 48px;
+  align-self: end;
+}
 
 .member-list {
   display: grid;
@@ -1597,13 +1624,15 @@ pre {
 
 
 @media (max-width: 1040px) {
-  .member-form {
+  .member-form,
+  .member-form.user-form {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 720px) {
   .member-form,
+  .member-form.user-form,
   .member-row {
     grid-template-columns: 1fr;
   }

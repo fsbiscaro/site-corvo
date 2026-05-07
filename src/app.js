@@ -314,14 +314,14 @@ async function renderAdminMembers() {
     return;
   }
 
-  list.innerHTML = '<div class="empty-state compact">Carregando membros...</div>';
+  list.innerHTML = '<div class="empty-state compact">Carregando usuarios...</div>';
   try {
     const response = await fetch(`${API_BASE}/admin/users`, { headers: { Accept: "application/json" } });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Nao consegui carregar os membros.");
+    if (!response.ok) throw new Error(payload.error || "Nao consegui carregar os usuarios.");
     const members = payload.users || [];
     if (!members.length) {
-      list.innerHTML = '<div class="empty-state compact">Nenhum membro cadastrado ainda.</div>';
+      list.innerHTML = '<div class="empty-state compact">Nenhum usuario cadastrado ainda.</div>';
       return;
     }
     list.innerHTML = members.map(renderMemberRow).join("");
@@ -331,27 +331,46 @@ async function renderAdminMembers() {
 }
 
 function renderMemberRow(member) {
+  const roleLabel = formatRoleLabel(member.role);
+  const statusLabel = formatStatusLabel(member.plan_status);
+  const isActive = member.plan_status === "active";
+  const tier = member.catarse_tier ? ` · ${member.catarse_tier}` : "";
+
   return `
     <article class="member-row">
       <div>
         <strong>${escapeHtml(member.display_name || member.email)}</strong>
-        <span>${escapeHtml(member.email)}</span>
+        <span>${escapeHtml(member.email)} · ${escapeHtml(roleLabel)}${escapeHtml(tier)}</span>
       </div>
-      <span class="access-chip ${member.plan_status === "active" ? "is-open" : ""}">${escapeHtml(member.role)} · ${escapeHtml(member.plan_status)}</span>
+      <span class="access-chip ${isActive ? "is-open" : ""}">${escapeHtml(statusLabel)}</span>
     </article>
   `;
 }
 
+function formatRoleLabel(role) {
+  return ({ admin: "Administrador", member: "Membro", guest: "Visitante" })[role] || role || "Usuario";
+}
+
+function formatStatusLabel(status) {
+  return ({ active: "Ativo", inactive: "Inativo" })[status] || status || "Indefinido";
+}
+
 async function createMember(event) {
   event.preventDefault();
+  const list = document.querySelector("#memberList");
   if (authState.offline) {
-    document.querySelector("#memberList").innerHTML = '<p class="error-text">Cadastro real precisa do Cloudflare D1 ativo.</p>';
+    if (list) list.innerHTML = '<p class="error-text">Cadastro real precisa do Cloudflare D1 ativo.</p>';
     return;
   }
 
-  const button = event.currentTarget.querySelector("button[type='submit']");
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  const role = document.querySelector("#memberRole")?.value || "member";
+  const planStatus = document.querySelector("#memberStatus")?.value || "active";
+  const plan = role === "admin" ? "corvo" : role === "member" ? "catarse" : "free";
+
   button.disabled = true;
-  button.textContent = "Liberando...";
+  button.textContent = "Criando...";
   try {
     const response = await fetch(`${API_BASE}/admin/users`, {
       method: "POST",
@@ -360,22 +379,25 @@ async function createMember(event) {
         email: document.querySelector("#memberEmail").value,
         displayName: document.querySelector("#memberName").value,
         password: document.querySelector("#memberPassword").value,
-        role: "member",
-        plan: "catarse",
-        planStatus: "active",
+        role,
+        plan,
+        planStatus,
         catarseTier: document.querySelector("#memberTier").value
       })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Nao consegui criar o membro.");
-    event.currentTarget.reset();
+    if (!response.ok) throw new Error(payload.error || "Nao consegui criar o usuario.");
+    form.reset();
+    document.querySelector("#memberRole").value = "member";
+    document.querySelector("#memberStatus").value = "active";
     document.querySelector("#memberTier").value = "R$15";
+    setTransientStatus("Usuario criado");
     await renderAdminMembers();
   } catch (error) {
-    document.querySelector("#memberList").innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
+    if (list) list.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
   } finally {
     button.disabled = false;
-    button.textContent = "Liberar acesso";
+    button.textContent = "Criar usuario";
   }
 }
 function loadState() {

@@ -155,6 +155,9 @@ async function createUser(request, env) {
   const password = String(body.password || "");
   if (!email || !password) return json({ error: "Email e senha inicial sao obrigatorios." }, { status: 400 });
 
+  const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+  if (existingUser) return json({ error: "Ja existe um usuario com esse email." }, { status: 409 });
+
   const salt = randomHex(16);
   const hash = await hashPassword(password, salt);
   const now = new Date().toISOString();
@@ -242,7 +245,7 @@ function publicUser(user) {
 
 function featuresForUser(user) {
   if (!user) return ROLE_FEATURES.guest;
-  if (user.role === "admin") return ROLE_FEATURES.admin;
+  if (user.role === "admin" && user.plan_status === "active") return ROLE_FEATURES.admin;
   if (user.role === "member" && user.plan_status === "active") return ROLE_FEATURES.member;
   return ROLE_FEATURES.guest;
 }

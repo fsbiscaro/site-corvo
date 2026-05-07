@@ -1,4 +1,5 @@
 const STORAGE_KEY = "grimorio-corvo-state-v1";
+const AUTH_GATE_KEY = "grimorio-corvo-auth-gate";
 
 const defaultTopics = [
   { id: crypto.randomUUID(), title: "Upgrade de precon por ate R$50", series: "Commander barato", status: "pending" },
@@ -36,7 +37,7 @@ function canOpenView(viewId) {
 function routeAuthenticatedUser() {
   if (!authState.isAuthenticated) return;
   if (hasFeature("admin")) {
-    setView("temas");
+    setView("dashboard");
     return;
   }
   if (hasFeature("decks")) {
@@ -69,6 +70,15 @@ function applyAccess() {
 
 async function initAuth() {
   bindAuthControls();
+
+  if (shouldRequireLoginGate()) {
+    setAuthState({ isAuthenticated: false, user: null, features: ["dashboard"] });
+    applyAccess();
+    setView("dashboard");
+    openAuthModal({ required: true });
+    return;
+  }
+
   try {
     const response = await fetch(`${API_BASE}/auth/me`, { headers: { Accept: "application/json" } });
     const contentType = response.headers.get("content-type") || "";
@@ -86,6 +96,10 @@ async function initAuth() {
   applyAccess();
   if (authState.isAuthenticated) routeAuthenticatedUser();
   else if (!authState.offline) openAuthModal({ required: true });
+}
+
+function shouldRequireLoginGate() {
+  return location.protocol !== "file:" && sessionStorage.getItem(AUTH_GATE_KEY) !== "open";
 }
 
 function bindAuthControls() {
@@ -148,6 +162,7 @@ async function login(event) {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Nao foi possivel entrar.");
+    sessionStorage.setItem(AUTH_GATE_KEY, "open");
     setAuthState(payload);
     setAuthFeedback("Entrada liberada.", "ok");
     closeAuthModal({ resetForm: true, force: true });
@@ -162,6 +177,7 @@ async function login(event) {
 
 async function logout() {
   await fetch(`${API_BASE}/auth/logout`, { method: "POST", headers: { Accept: "application/json" } });
+  sessionStorage.removeItem(AUTH_GATE_KEY);
   setAuthState({ isAuthenticated: false, user: null, features: ["dashboard"] });
   applyAccess();
   setView("dashboard");

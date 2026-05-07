@@ -1590,6 +1590,12 @@ pre {
   box-shadow: none;
 }
 
+
+
+
+
+
+
 @media (max-width: 1040px) {
   .member-form {
     grid-template-columns: 1fr 1fr;
@@ -1806,6 +1812,12 @@ pre {
   font-weight: 800;
 }
 
+
+
+
+
+
+
 @media (max-width: 1040px) {
 
   .nav-actions {
@@ -1877,6 +1889,188 @@ pre {
   animation-delay: 260ms;
 }
 
+
+.spell-loader[hidden] {
+  display: none !important;
+}
+
+.spell-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(245, 212, 119, 0.12), transparent 18rem),
+    radial-gradient(circle at 50% 50%, rgba(109, 41, 148, 0.2), transparent 28rem),
+    rgba(5, 4, 8, 0.82);
+  backdrop-filter: blur(18px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+
+.spell-loader.is-active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.spell-loader-core {
+  display: grid;
+  place-items: center;
+  gap: 22px;
+  color: var(--moon);
+  text-align: center;
+}
+
+.spell-loader-core p {
+  margin: 0;
+  color: var(--gold);
+  font-family: "Palatino Linotype", Georgia, serif;
+  font-size: 1.12rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 22px rgba(245, 212, 119, 0.34);
+}
+
+.arcane-sphere {
+  position: relative;
+  width: clamp(148px, 24vw, 214px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 28%, rgba(255, 248, 204, 0.96), rgba(245, 212, 119, 0.48) 22%, transparent 39%),
+    radial-gradient(circle at 50% 56%, rgba(144, 76, 201, 0.72), rgba(56, 20, 74, 0.92) 52%, rgba(9, 6, 15, 0.98) 72%);
+  box-shadow:
+    0 0 34px rgba(245, 212, 119, 0.38),
+    0 0 88px rgba(109, 41, 148, 0.48),
+    inset 0 0 36px rgba(255, 248, 204, 0.24),
+    inset 0 -30px 54px rgba(4, 3, 8, 0.74);
+  animation: spherePulse 1700ms ease-in-out infinite;
+}
+
+.sphere-glow,
+.sphere-ring,
+.sphere-spark {
+  position: absolute;
+  pointer-events: none;
+}
+
+.sphere-glow {
+  inset: -24%;
+  border-radius: inherit;
+  background: conic-gradient(from 90deg, transparent, rgba(245, 212, 119, 0.28), transparent, rgba(120, 233, 190, 0.18), transparent);
+  filter: blur(20px);
+  animation: runeSpin 5200ms linear infinite;
+}
+
+.sphere-ring {
+  inset: 8%;
+  border: 1px solid rgba(255, 236, 188, 0.48);
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(245, 212, 119, 0.25);
+}
+
+.ring-one {
+  transform: rotateX(62deg) rotateZ(18deg);
+  animation: ringOrbitOne 1500ms linear infinite;
+}
+
+.ring-two {
+  inset: 1%;
+  border-color: rgba(120, 233, 190, 0.42);
+  transform: rotateX(70deg) rotateY(38deg);
+  animation: ringOrbitTwo 2100ms linear infinite reverse;
+}
+
+.ring-three {
+  inset: 17%;
+  border-color: rgba(255, 248, 204, 0.3);
+  transform: rotateY(74deg) rotateZ(-26deg);
+  animation: ringOrbitThree 2400ms linear infinite;
+}
+
+.sphere-spark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 18px rgba(245, 212, 119, 0.9);
+}
+
+.spark-one {
+  top: 14%;
+  left: 8%;
+  animation: sparkFloat 1800ms ease-in-out infinite;
+}
+
+.spark-two {
+  right: 4%;
+  top: 34%;
+  width: 6px;
+  height: 6px;
+  background: var(--sage);
+  animation: sparkFloat 2100ms ease-in-out 180ms infinite reverse;
+}
+
+.spark-three {
+  left: 47%;
+  bottom: -3%;
+  width: 5px;
+  height: 5px;
+  animation: sparkFloat 2300ms ease-in-out 320ms infinite;
+}
+
+@keyframes spherePulse {
+  0%,
+  100% {
+    transform: scale(0.98);
+    filter: saturate(1);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: saturate(1.2);
+  }
+}
+
+@keyframes runeSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ringOrbitOne {
+  to {
+    transform: rotateX(62deg) rotateZ(378deg);
+  }
+}
+
+@keyframes ringOrbitTwo {
+  to {
+    transform: rotateX(70deg) rotateY(38deg) rotateZ(360deg);
+  }
+}
+
+@keyframes ringOrbitThree {
+  to {
+    transform: rotateY(74deg) rotateZ(334deg);
+  }
+}
+
+@keyframes sparkFloat {
+  0%,
+  100% {
+    translate: 0 0;
+    opacity: 0.52;
+  }
+  50% {
+    translate: 0 -14px;
+    opacity: 1;
+  }
+}
+
 @keyframes viewRise {
   from {
     opacity: 0;
@@ -1935,6 +2129,12 @@ pre {
     transform: translate3d(5%, -6%, 0) scaleX(1.08);
   }
 }
+
+
+
+
+
+
 
 @media (max-width: 1040px) {
   .raven-nav {
@@ -2154,6 +2354,12 @@ pre {
     display: none;
   }
 }
+
+
+
+
+
+
 
 @media (max-width: 1040px) {
   .scheduler-layout {

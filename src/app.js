@@ -13,6 +13,7 @@ const navItems = document.querySelectorAll("[data-view-target]");
 const saveStatus = document.querySelector("#saveStatus");
 const state = loadState();
 const API_BASE = "/api";
+const LOGIN_ANIMATION_MS = 1100;
 const ALL_FEATURES = ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"];
 const viewFeatures = { temas: "temas", cartas: "card_search" };
 const authState = {
@@ -141,17 +142,20 @@ function closeAuthModal({ resetForm = false, force = false } = {}) {
 async function login(event) {
   event.preventDefault();
   const feedback = document.querySelector("#authFeedback");
+  const button = event.currentTarget.querySelector("button[type='submit']");
   setAuthFeedback("Abrindo o grimorio...", "ok");
+  showSpellLoader();
+  if (button) button.disabled = true;
 
   try {
-    const response = await fetch(`${API_BASE}/auth/login`, {
+    const response = await withMinimumDelay(fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         email: document.querySelector("#loginEmail").value,
         password: document.querySelector("#loginPassword").value
       })
-    });
+    }), LOGIN_ANIMATION_MS);
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Nao foi possivel entrar.");
     sessionStorage.setItem(AUTH_GATE_KEY, "open");
@@ -164,6 +168,44 @@ async function login(event) {
   } catch (error) {
     setAuthFeedback(error.message, "error");
     if (feedback) feedback.classList.add("is-error");
+  } finally {
+    hideSpellLoader();
+    if (button) button.disabled = false;
+  }
+}
+
+function showSpellLoader() {
+  const loader = document.querySelector("#spellLoader");
+  if (!loader) return;
+  loader.hidden = false;
+  loader.removeAttribute("hidden");
+  loader.classList.add("is-active");
+}
+
+function hideSpellLoader() {
+  const loader = document.querySelector("#spellLoader");
+  if (!loader) return;
+  loader.classList.remove("is-active");
+  window.setTimeout(() => {
+    if (loader.classList.contains("is-active")) return;
+    loader.hidden = true;
+    loader.setAttribute("hidden", "");
+  }, 240);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function withMinimumDelay(promise, ms) {
+  const delay = wait(ms);
+  try {
+    const result = await promise;
+    await delay;
+    return result;
+  } catch (error) {
+    await delay;
+    throw error;
   }
 }
 

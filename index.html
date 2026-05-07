@@ -44,10 +44,13 @@
           <div class="hero-copy reveal">
             <p class="eyebrow">Central criativa MTG</p>
             <h1 id="dashboard-title">Grimório do Corvo</h1>
-            <p class="hero-line">Temas, cartas e decks reunidos num só lugar para transformar uma ideia solta em vídeo pronto.</p>
+            <p class="hero-line" id="dashboardIntro">Temas, cartas e decks reunidos num só lugar para transformar uma ideia solta em vídeo pronto.</p>
             <div class="hero-actions">
-              <button class="primary-action" type="button" data-jump="temas">Organizar temas</button>
-              <button class="ghost-action" type="button" data-jump="cartas">Buscar carta</button>
+              <button class="primary-action" type="button" data-jump="temas" data-feature="temas">Organizar temas</button>
+              <button class="ghost-action" type="button" data-jump="cartas" data-feature="card_search">Buscar carta</button>
+            </div>
+            <div class="hero-actions member-hero-actions" data-member-only hidden>
+              <button class="primary-action large" type="button" data-jump="decks">Analisar meu deck</button>
             </div>
           </div>
 
@@ -55,7 +58,7 @@
             <img class="hero-corvo" src="assets/brand/corvo-full.png" alt="" data-parallax="18" />
           </div>
 
-          <div class="hero-metrics reveal" aria-label="Resumo do grimório">
+          <div class="hero-metrics reveal" aria-label="Resumo do grimório" data-feature="temas">
             <div>
               <strong id="metricThemes">0</strong>
               <span>pendentes</span>
@@ -65,6 +68,12 @@
               <span>feitos</span>
             </div>
           </div>
+
+          <article class="member-welcome-card reveal" data-member-only hidden aria-label="Acesso de membro">
+            <span>Seu acesso está pronto</span>
+            <strong>Análise de deck liberada</strong>
+            <p>Entre com sua lista e receba uma leitura clara para ajustar curva, base de mana, funções e próximos upgrades.</p>
+          </article>
         </div>
 
         <div class="portal-grid" aria-label="Ferramentas">
@@ -76,9 +85,9 @@
             <span>Cartas</span>
             <strong>Scryfall, LigaMagic, EDHREC</strong>
           </button>
-          <button class="tool-tile reveal" type="button" data-jump="decks">
-            <span>Decks</span>
-            <strong>curva, cores, funções</strong>
+          <button class="tool-tile deck-entry-tile reveal" type="button" data-jump="decks">
+            <span id="deckTileTitle">Decks</span>
+            <strong id="deckTileText">curva, cores, funções</strong>
           </button>
         </div>
         <section class="admin-panel user-admin-panel reveal" id="adminMembersPanel" data-feature="admin" aria-label="Gerenciar usuarios">

@@ -32,6 +32,10 @@ function isAdminUser() {
   return authState.isAuthenticated && authState.user?.role === "admin" && hasFeature("admin");
 }
 
+function isCommonUser() {
+  return authState.isAuthenticated && !authState.offline && !isAdminUser() && hasFeature("decks");
+}
+
 function canOpenView(viewId) {
   if (!authState.isAuthenticated && !authState.offline) return viewId === "dashboard";
   if (viewId === "dashboard" || viewId === "decks") return true;
@@ -52,6 +56,8 @@ function applyAccess() {
     element.toggleAttribute("aria-hidden", !allowed);
   });
 
+  applyRolePresentation();
+
   const activeView = document.querySelector(".view.active");
   if (activeView && !canOpenView(activeView.id)) setView("dashboard");
 
@@ -65,6 +71,35 @@ function applyAccess() {
 
   updateDeckGate();
   renderAdminMembers();
+}
+
+function applyRolePresentation() {
+  const mode = isAdminUser() ? "admin" : isCommonUser() ? "member" : "guest";
+  document.body.dataset.accountMode = mode;
+
+  document.querySelectorAll("[data-member-only]").forEach((element) => {
+    const allowed = mode === "member";
+    element.hidden = !allowed;
+    element.toggleAttribute("aria-hidden", !allowed);
+  });
+
+  const intro = document.querySelector("#dashboardIntro");
+  if (intro) {
+    intro.textContent = mode === "member"
+      ? `Boas-vindas, ${getUserFirstName()}. O analisador do Corvo está pronto para ler sua lista e apontar ajustes de curva, base de mana, funções e próximos upgrades.`
+      : "Temas, cartas e decks reunidos num só lugar para transformar uma ideia solta em vídeo pronto.";
+  }
+
+  const deckTitle = document.querySelector("#deckTileTitle");
+  const deckText = document.querySelector("#deckTileText");
+  if (deckTitle) deckTitle.textContent = mode === "member" ? "Analise seu deck aqui" : "Decks";
+  if (deckText) deckText.textContent = mode === "member" ? "cole sua lista e receba a leitura do Corvo" : "curva, cores, funções";
+}
+
+function getUserFirstName() {
+  const rawName = authState.user?.displayName || authState.user?.email || "mago";
+  const cleanName = String(rawName).split("@")[0].trim();
+  return cleanName.split(/\s+/)[0] || "mago";
 }
 
 async function initAuth() {

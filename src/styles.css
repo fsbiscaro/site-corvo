@@ -506,6 +506,79 @@ h3 {
 .tool-tile:hover::before {
   transform: translateX(120%);
 }
+.member-hero-actions {
+  margin-top: 4px;
+}
+
+.primary-action.large {
+  min-height: 56px;
+  padding: 0 28px;
+  font-size: 1.02rem;
+}
+
+.member-welcome-card {
+  position: absolute;
+  left: max(26px, 7vw);
+  bottom: 34px;
+  z-index: 3;
+  width: min(390px, calc(100vw - 44px));
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 236, 188, 0.18);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(245, 212, 119, 0.12), transparent 44%),
+    rgba(18, 10, 22, 0.7);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px);
+}
+
+.member-welcome-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--gold);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.member-welcome-card strong {
+  display: block;
+  color: var(--moon);
+  font-family: "Palatino Linotype", Georgia, serif;
+  font-size: 1.35rem;
+}
+
+.member-welcome-card p {
+  margin: 8px 0 0;
+  color: rgba(255, 248, 232, 0.8);
+  line-height: 1.55;
+}
+
+body[data-account-mode="member"] .hero-copy .hero-actions:not(.member-hero-actions) {
+  display: none;
+}
+
+body[data-account-mode="member"] .portal-grid {
+  width: min(760px, calc(100vw - 36px));
+  grid-template-columns: 1fr;
+  margin-top: 18px;
+}
+
+body[data-account-mode="member"] .deck-entry-tile {
+  min-height: 220px;
+  padding: 30px;
+}
+
+body[data-account-mode="member"] .deck-entry-tile span {
+  margin-bottom: 48px;
+  font-size: clamp(1.7rem, 3.6vw, 2.55rem);
+}
+
+body[data-account-mode="member"] .deck-entry-tile strong {
+  max-width: 520px;
+  font-size: 1.05rem;
+}
 
 .chapter-view {
   width: min(1180px, calc(100vw - 36px));

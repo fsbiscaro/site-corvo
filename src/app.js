@@ -28,6 +28,10 @@ function hasFeature(feature) {
   return authState.features.includes(feature);
 }
 
+function isAdminUser() {
+  return authState.isAuthenticated && authState.user?.role === "admin" && hasFeature("admin");
+}
+
 function canOpenView(viewId) {
   if (!authState.isAuthenticated && !authState.offline) return viewId === "dashboard";
   if (viewId === "dashboard" || viewId === "decks") return true;
@@ -43,7 +47,9 @@ function routeAuthenticatedUser() {
 function applyAccess() {
   document.querySelectorAll("[data-feature]").forEach((element) => {
     const feature = element.dataset.feature;
-    element.hidden = Boolean(feature && !hasFeature(feature));
+    const allowed = feature === "admin" ? isAdminUser() : !feature || hasFeature(feature);
+    element.hidden = !allowed;
+    element.toggleAttribute("aria-hidden", !allowed);
   });
 
   const activeView = document.querySelector(".view.active");
@@ -307,7 +313,10 @@ function renderAiText(text) {
 async function renderAdminMembers() {
   const list = document.querySelector("#memberList");
   const panel = document.querySelector("#adminMembersPanel");
-  if (!list || !panel || !hasFeature("admin")) return;
+  if (!list || !panel || !isAdminUser()) {
+    if (list) list.innerHTML = "";
+    return;
+  }
 
   if (authState.offline) {
     list.innerHTML = '<div class="empty-state compact">Cadastro real de membros fica ativo quando o site estiver no Cloudflare com D1.</div>';
@@ -358,6 +367,11 @@ function formatStatusLabel(status) {
 async function createMember(event) {
   event.preventDefault();
   const list = document.querySelector("#memberList");
+  if (!isAdminUser()) {
+    if (list) list.innerHTML = '<p class="error-text">Somente administradores podem criar usuarios.</p>';
+    return;
+  }
+
   if (authState.offline) {
     if (list) list.innerHTML = '<p class="error-text">Cadastro real precisa do Cloudflare D1 ativo.</p>';
     return;

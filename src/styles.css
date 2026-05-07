@@ -1,3 +1,7 @@
+:where([hidden]) {
+  display: none !important;
+}
+
 :root {
   color-scheme: dark;
   --night: #100914;

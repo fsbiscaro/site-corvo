@@ -133,7 +133,7 @@ async function me(request, env) {
 }
 
 async function listUsers(request, env) {
-  const user = await requireFeature(request, env, "admin");
+  const user = await requireAdmin(request, env);
   if (user instanceof Response) return user;
 
   const result = await env.DB.prepare(
@@ -143,7 +143,7 @@ async function listUsers(request, env) {
 }
 
 async function createUser(request, env) {
-  const current = await requireFeature(request, env, "admin");
+  const current = await requireAdmin(request, env);
   if (current instanceof Response) return current;
 
   const body = await readJson(request);
@@ -222,6 +222,16 @@ async function requireFeature(request, env, feature) {
   const features = featuresForUser(user);
   if (!features.includes(feature)) {
     return json({ error: "Seu acesso atual nao libera essa ferramenta.", code: "PLAN_REQUIRED" }, { status: 403 });
+  }
+  return user;
+}
+
+async function requireAdmin(request, env) {
+  assertDb(env);
+  const user = await getCurrentUser(request, env);
+  if (!user) return json({ error: "Entre para continuar.", code: "LOGIN_REQUIRED" }, { status: 401 });
+  if (user.role !== "admin" || user.plan_status !== "active") {
+    return json({ error: "Somente administradores podem gerenciar usuarios.", code: "ADMIN_REQUIRED" }, { status: 403 });
   }
   return user;
 }

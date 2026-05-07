@@ -55,10 +55,12 @@ function applyAccess() {
   const activeView = document.querySelector(".view.active");
   if (activeView && !canOpenView(activeView.id)) setView("dashboard");
 
-  const userLabel = authState.user?.displayName || authState.user?.email || "Entrar";
   const authOpen = document.querySelector("#authOpen");
   const authLogout = document.querySelector("#authLogout");
-  if (authOpen) authOpen.textContent = authState.isAuthenticated ? userLabel : "Entrar";
+  if (authOpen) {
+    authOpen.textContent = "Entrar";
+    authOpen.hidden = authState.isAuthenticated && !authState.offline;
+  }
   if (authLogout) authLogout.hidden = !authState.isAuthenticated || authState.offline;
 
   updateDeckGate();

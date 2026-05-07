@@ -36,14 +36,6 @@ function canOpenView(viewId) {
 
 function routeAuthenticatedUser() {
   if (!authState.isAuthenticated) return;
-  if (hasFeature("admin")) {
-    setView("dashboard");
-    return;
-  }
-  if (hasFeature("decks")) {
-    setView("decks");
-    return;
-  }
   setView("dashboard");
 }
 

@@ -15,7 +15,7 @@ const state = loadState();
 const API_BASE = "/api";
 const LOGIN_ANIMATION_MS = 1100;
 const ALL_FEATURES = ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"];
-const viewFeatures = { temas: "temas", cartas: "card_search" };
+const viewFeatures = { temas: "temas", cartas: "card_search", usuarios: "admin" };
 const authState = {
   loading: true,
   isAuthenticated: false,
@@ -440,13 +440,13 @@ async function createMember(event) {
     document.querySelector("#memberRole").value = "member";
     document.querySelector("#memberStatus").value = "active";
     document.querySelector("#memberTier").value = "R$15";
-    setTransientStatus("Usuario criado");
+    setTransientStatus("Usuário criado");
     await renderAdminMembers();
   } catch (error) {
     if (list) list.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
   } finally {
     button.disabled = false;
-    button.textContent = "Criar usuario";
+    button.textContent = "Criar usuário";
   }
 }
 function loadState() {

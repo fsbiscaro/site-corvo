@@ -27,6 +27,7 @@
         <button class="nav-item" type="button" data-view-target="temas" data-feature="temas">Temas</button>
         <button class="nav-item" type="button" data-view-target="cartas" data-feature="card_search">Cartas</button>
         <button class="nav-item" type="button" data-view-target="decks">Decks</button>
+        <button class="nav-item" type="button" data-view-target="usuarios" data-feature="admin">Usuários</button>
       </nav>
 
       <div class="nav-actions">
@@ -90,11 +91,23 @@
             <strong id="deckTileText">curva, cores, funções</strong>
           </button>
         </div>
+      </section>
+
+
+      <section class="view chapter-view" id="usuarios" aria-labelledby="usuarios-title" data-feature="admin">
+        <div class="chapter-hero users-hero">
+          <div>
+            <p class="eyebrow">Admin</p>
+            <h2 id="usuarios-title">Gestão de usuários</h2>
+            <p class="chapter-lead">Crie acessos, defina perfil e acompanhe quem pode usar as ferramentas do Grimório.</p>
+          </div>
+        </div>
+
         <section class="admin-panel user-admin-panel reveal" id="adminMembersPanel" data-feature="admin" aria-label="Gerenciar usuarios">
           <div class="admin-panel-header">
             <div>
               <p class="eyebrow">Admin</p>
-              <h3>Usuarios do sistema</h3>
+              <h3>Usuários do sistema</h3>
             </div>
           </div>
           <form class="member-form user-form" id="memberForm">
@@ -104,7 +117,7 @@
             </label>
             <label>
               <span>Nome</span>
-              <input id="memberName" type="text" placeholder="Nome do usuario" required />
+              <input id="memberName" type="text" placeholder="Nome do usuário" required />
             </label>
             <label>
               <span>Perfil</span>
@@ -123,18 +136,17 @@
             </label>
             <label>
               <span>Senha inicial</span>
-              <input id="memberPassword" type="text" placeholder="Senha temporaria" required />
+              <input id="memberPassword" type="text" placeholder="Senha temporária" required />
             </label>
             <label>
               <span>Tier</span>
               <input id="memberTier" type="text" placeholder="R$15" value="R$15" />
             </label>
-            <button class="primary-action" type="submit">Criar usuario</button>
+            <button class="primary-action" type="submit">Criar usuário</button>
           </form>
           <div class="member-list" id="memberList" aria-live="polite"></div>
         </section>
       </section>
-
       <section class="view chapter-view" id="temas" aria-labelledby="temas-title" data-feature="temas">
         <div class="chapter-hero topics-hero">
           <div>

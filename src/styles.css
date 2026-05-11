@@ -2415,16 +2415,17 @@ pre {
   }
 
   .hero-orbit {
-    right: -28vw;
-    top: 190px;
+    right: 0;
+    top: 390px;
     bottom: auto;
-    width: 88vw;
+    width: clamp(132px, 38vw, 168px);
     min-width: 0;
-    opacity: 0.26;
+    opacity: 0.62;
   }
 
   .hero-corvo {
     width: 100%;
+    margin-left: 0;
   }
 
   .hero-metrics {

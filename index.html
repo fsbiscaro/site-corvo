@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -50,15 +50,36 @@
               <button class="primary-action" type="button" data-jump="temas" data-feature="temas">Organizar temas</button>
               <button class="ghost-action" type="button" data-jump="cartas" data-feature="card_search">Buscar carta</button>
             </div>
-            <div class="hero-actions member-hero-actions" data-member-only hidden>
-              <button class="primary-action large" type="button" data-jump="decks">Analisar meu deck</button>
-            </div>
-            <article class="member-welcome-card reveal" data-member-only hidden aria-label="Acesso de membro">
-              <span>Seu acesso está pronto</span>
-              <strong>Análise de deck liberada</strong>
-              <p>Entre com sua lista e receba uma leitura clara para ajustar curva, base de mana, funções e próximos upgrades.</p>
-            </article>
-          </div>
+            <div class="member-portal reveal" data-member-only hidden aria-label="Entrada para o analisador de deck">
+              <button class="grimoire-book" type="button" data-jump="decks" aria-label="Abrir o Analisador de Deck do Corvo">
+                <span class="book-aura" aria-hidden="true"></span>
+                <span class="book-orbit orbit-one" aria-hidden="true"></span>
+                <span class="book-orbit orbit-two" aria-hidden="true"></span>
+                <span class="book-body">
+                  <span class="book-pages" aria-hidden="true"></span>
+                  <span class="book-cover">
+                    <span class="book-spine" aria-hidden="true"></span>
+                    <span class="book-corner corner-tl" aria-hidden="true"></span>
+                    <span class="book-corner corner-tr" aria-hidden="true"></span>
+                    <span class="book-corner corner-bl" aria-hidden="true"></span>
+                    <span class="book-corner corner-br" aria-hidden="true"></span>
+                    <span class="book-raven-seal" aria-hidden="true">
+                      <img src="assets/brand/corvo-full.png" alt="" />
+                    </span>
+                    <span class="book-title">Analisador de Deck do Corvo</span>
+                    <span class="book-subtitle">Curva, mana, funções e upgrades</span>
+                    <span class="book-latch" aria-hidden="true"></span>
+                  </span>
+                </span>
+                <span class="book-caption">Clique no grimório para abrir sua leitura</span>
+              </button>
+              <div class="member-portal-notes" aria-label="O que o analisador entrega">
+                <span>Curva</span>
+                <span>Base de mana</span>
+                <span>Funções</span>
+                <span>Upgrades</span>
+              </div>
+            </div>          </div>
 
           <div class="hero-orbit reveal" data-parallax-root aria-hidden="true">
             <img class="hero-corvo" src="assets/brand/corvo-full.png" alt="" data-parallax="18" />

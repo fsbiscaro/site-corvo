@@ -1,4 +1,4 @@
-const STORAGE_KEY = "grimorio-corvo-state-v1";
+﻿const STORAGE_KEY = "grimorio-corvo-state-v1";
 const AUTH_GATE_KEY = "grimorio-corvo-auth-gate";
 
 const defaultTopics = [
@@ -86,7 +86,7 @@ function applyRolePresentation() {
   const intro = document.querySelector("#dashboardIntro");
   if (intro) {
     intro.textContent = mode === "member"
-      ? `Boas-vindas, ${getUserFirstName()}. O analisador do Corvo está pronto para ler sua lista e apontar ajustes de curva, base de mana, funções e próximos upgrades.`
+      ? `Olá, ${getUserFirstName()}. Seu grimório de análise está aberto: toque no livro, cole sua lista e receba uma leitura clara para ajustar curva, base de mana, funções e próximos upgrades.`
       : "Temas, cartas e decks reunidos num só lugar para transformar uma ideia solta em vídeo pronto.";
   }
 

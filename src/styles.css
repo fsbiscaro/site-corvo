@@ -517,11 +517,10 @@ h3 {
 }
 
 .member-welcome-card {
-  position: absolute;
-  left: max(26px, 7vw);
-  bottom: 34px;
+  position: relative;
   z-index: 3;
-  width: min(390px, calc(100vw - 44px));
+  width: min(390px, 100%);
+  margin-top: 16px;
   padding: 18px 20px;
   border: 1px solid rgba(255, 236, 188, 0.18);
   border-radius: 20px;

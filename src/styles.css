@@ -2294,21 +2294,43 @@ pre {
     width: calc(100vw - 18px);
     top: 9px;
     grid-template-columns: minmax(0, 1fr) auto;
-    overflow: hidden;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 22px;
+    overflow: visible;
+  }
+
+  .brand-lockup {
+    gap: 8px;
+  }
+
+  .brand-lockup img {
+    width: 38px;
+    height: 38px;
   }
 
   .brand-lockup span {
-    max-width: 190px;
+    max-width: 168px;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 0.95rem;
+  }
+
+  .nav-actions {
+    gap: 6px;
   }
 
   .spell-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    width: min(350px, calc(100vw - 40px));
-    justify-self: start;
-    gap: 4px;
+    display: flex;
+    width: 100%;
+    max-width: calc(100vw - 34px);
+    justify-self: stretch;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 4px;
+    border: 1px solid rgba(255, 236, 188, 0.1);
+    border-radius: 18px;
+    background: rgba(7, 5, 9, 0.28);
     scrollbar-width: none;
   }
 
@@ -2321,22 +2343,36 @@ pre {
   }
 
   .nav-item {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+
+  .auth-trigger {
     min-height: 36px;
-    padding: 0 6px;
-    font-size: 0.88rem;
+    padding: 0 10px;
+    font-size: 0.82rem;
   }
 
   main,
   .hero-view,
   .hero-stage {
     max-width: 100vw;
-    overflow: hidden;
+    overflow-x: hidden;
+  }
+
+  .hero-view {
+    min-height: auto;
+    padding-bottom: 36px;
   }
 
   .hero-stage {
     width: 100vw;
-    min-height: 88vh;
-    padding: 194px 20px 132px;
+    min-height: auto;
+    display: block;
+    padding: 154px 18px 28px;
   }
 
   .hero-backdrop {
@@ -2345,51 +2381,85 @@ pre {
 
   h1 {
     max-width: 100%;
-    font-size: clamp(3rem, 14vw, 4.05rem);
-    line-height: 0.88;
+    margin-bottom: 16px;
+    font-size: clamp(3rem, 15vw, 4.25rem);
+    line-height: 0.86;
   }
 
   h2 {
-    font-size: clamp(2.4rem, 14vw, 4rem);
+    font-size: clamp(2.35rem, 13vw, 3.8rem);
   }
 
   .hero-copy {
-    width: min(350px, calc(100vw - 40px));
-    max-width: min(350px, calc(100vw - 40px));
+    width: 100%;
+    max-width: 360px;
   }
 
   .hero-line {
     width: 100%;
     max-width: 100%;
-    font-size: 1rem;
+    margin-bottom: 20px;
+    font-size: 0.98rem;
+    line-height: 1.55;
+  }
+
+  .hero-actions {
+    gap: 8px;
+  }
+
+  .hero-actions .primary-action,
+  .hero-actions .ghost-action {
+    flex: 1 1 150px;
+    min-width: 0;
+    padding: 0 12px;
   }
 
   .hero-orbit {
     right: -28vw;
-    bottom: -2vh;
-    width: 86vw;
+    top: 190px;
+    bottom: auto;
+    width: 88vw;
     min-width: 0;
-    opacity: 0.4;
+    opacity: 0.26;
+  }
+
+  .hero-corvo {
+    width: 100%;
   }
 
   .hero-metrics {
-    left: 20px;
+    position: relative;
+    left: auto;
     right: auto;
-    bottom: 18px;
-    width: min(260px, calc(100vw - 40px));
+    bottom: auto;
+    width: 100%;
+    max-width: 360px;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+    margin-top: 20px;
   }
 
   .hero-metrics div {
     min-width: 0;
     width: auto;
     padding: 10px;
+    border-radius: 16px;
   }
 
   .hero-metrics strong {
     font-size: 1.65rem;
+  }
+
+  .member-welcome-card {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+    max-width: 360px;
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 18px;
   }
 
   .portal-grid,
@@ -2399,24 +2469,88 @@ pre {
 
   .portal-grid {
     grid-template-columns: 1fr;
+    margin-top: 12px;
+  }
+
+  .tool-tile {
+    min-height: 132px;
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  body[data-account-mode="member"] .deck-entry-tile {
+    min-height: 164px;
+    padding: 22px;
+  }
+
+  body[data-account-mode="member"] .deck-entry-tile span {
+    margin-bottom: 30px;
   }
 
   .chapter-view {
-    padding-top: 166px;
+    padding-top: 146px;
+    padding-bottom: 48px;
   }
 
   .chapter-hero {
+    min-height: auto;
     display: grid;
     align-items: start;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 16px 0 12px;
+  }
+
+  .chapter-hero::before {
+    inset: -18px 0;
+    background-size: min(360px, 92vw) auto;
+  }
+
+  .chapter-lead {
+    max-width: 100%;
+    font-size: 0.95rem;
   }
 
   .inline-form,
   .search-strip,
-  .topic-composer {
+  .topic-composer,
+  .access-gate,
+  .calendar-toolbar {
     grid-template-columns: 1fr;
   }
 
+  .search-strip .primary-action,
+  .inline-form .primary-action,
+  .topic-composer .primary-action {
+    width: 100%;
+  }
+
+  .topic-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .summary-panel {
+    min-height: 92px;
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .summary-panel span {
+    font-size: 0.72rem;
+    letter-spacing: 0;
+  }
+
+  .summary-panel strong {
+    font-size: 1.85rem;
+  }
+
+  .topic-board {
+    border-radius: 18px;
+  }
+
   .topic-board-header {
+    grid-template-columns: 1fr;
     padding: 16px;
   }
 
@@ -2428,19 +2562,37 @@ pre {
   }
 
   .filter-bar.compact .filter {
+    min-height: 34px;
     padding: 0 8px;
+    font-size: 0.78rem;
   }
 
-  .topic-row {
-    grid-template-columns: 36px minmax(0, 1fr);
+  .topic-row,
+  .schedule-bin .topic-row {
+    grid-template-columns: 34px minmax(0, 1fr);
     gap: 10px;
-    padding: 14px;
+    padding: 12px;
   }
 
   .topic-status,
-  .topic-actions {
+  .topic-actions,
+  .schedule-bin .topic-status,
+  .schedule-bin .topic-actions {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .topic-actions,
+  .schedule-bin .topic-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: flex-start;
+  }
+
+  .small-button {
+    min-width: 0;
+    padding: 0 8px;
   }
 
   .card-suggestion {
@@ -2455,11 +2607,42 @@ pre {
     display: none;
   }
 
-  .topic-actions {
-    justify-content: flex-start;
+  .card-display {
+    grid-template-columns: 1fr;
   }
 
+  .card-image {
+    width: min(280px, 100%);
+    margin: 0 auto;
+  }
 
+  .spell-form,
+  .manuscript,
+  .card-info,
+  .admin-panel {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .manuscript {
+    min-height: 300px;
+  }
+
+  .member-form,
+  .member-form.user-form,
+  .member-row {
+    grid-template-columns: 1fr;
+  }
+
+  .member-row .access-chip {
+    justify-self: start;
+  }
+
+  .auth-dialog {
+    width: min(440px, calc(100vw - 24px));
+    padding: 22px;
+    border-radius: 18px;
+  }
 
   .save-rune {
     display: none;
@@ -2484,6 +2667,10 @@ pre {
 }
 
 @media (max-width: 720px) {
+  .scheduler-layout {
+    min-height: 0;
+  }
+
   .calendar-toolbar {
     grid-template-columns: 1fr 1fr;
   }
@@ -2503,9 +2690,33 @@ pre {
     padding: 14px;
   }
 
-  .calendar-weekdays,
+  .calendar-scroll {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .calendar-weekdays {
+    display: none;
+  }
+
   .calendar-grid {
-    min-width: 1088px;
+    min-width: 0;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .calendar-day {
+    min-height: 118px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .calendar-day.outside-month {
+    display: none;
+  }
+
+  .calendar-topic-card {
+    max-width: 100%;
   }
 }
 @media (prefers-reduced-motion: reduce) {

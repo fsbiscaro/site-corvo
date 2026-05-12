@@ -1763,6 +1763,20 @@ pre {
   color: rgba(255, 248, 232, 0.9);
 }
 
+.deck-page-output,
+.deck-page-output p,
+.deck-page-output li,
+.deck-page-output dd,
+.deck-page-output .deck-stats dd,
+.deck-page-output .bar-row {
+  color: rgba(45, 32, 18, 0.94);
+}
+
+.deck-page-output h3,
+.deck-page-output .deck-stats dt {
+  color: #6f4318;
+}
+
 
 .download-panel {
   display: grid;

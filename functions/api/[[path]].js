@@ -194,8 +194,15 @@ async function analyzeDeck(request, env) {
   const entries = parseDecklist(decklist);
   if (!entries.length) return json({ error: "Cole uma decklist valida." }, { status: 400 });
 
-  const cards = await fetchCards(entries);
-  const report = buildDeckReport(entries, cards);
+  let report;
+  try {
+    const cards = await fetchCards(entries);
+    report = buildDeckReport(entries, cards);
+  } catch (error) {
+    console.error("Deck card lookup failed", error);
+    report = buildNameOnlyDeckReport(entries, error);
+  }
+
   report.aiText = await generateAiDeckReading(env, report, entries);
   report.aiEnabled = Boolean(report.aiText);
   report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
@@ -286,10 +293,17 @@ async function fetchCards(entries) {
   for (const chunk of chunks) {
     const response = await fetch("https://api.scryfall.com/cards/collection", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": "GrimorioDoCorvo/1.0 (site-corvo.fsbiscaro.workers.dev)"
+      },
       body: JSON.stringify({ identifiers: chunk.map((name) => ({ name })) })
     });
-    if (!response.ok) throw new Error("Nao consegui consultar o Scryfall agora.");
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(`Nao consegui consultar o Scryfall agora. Status ${response.status}. ${detail.slice(0, 120)}`);
+    }
     const data = await response.json();
     found.push(...(data.data || []));
     notFound.push(...(data.not_found || []).map((item) => item.name).filter(Boolean));
@@ -297,6 +311,34 @@ async function fetchCards(entries) {
 
   const counts = new Map(entries.map((entry) => [entry.name.toLowerCase(), entry.quantity]));
   return { found: found.map((card) => ({ ...card, quantity: counts.get(card.name.toLowerCase()) || 1 })), notFound };
+}
+
+function buildNameOnlyDeckReport(entries, error) {
+  const total = entries.reduce((sum, entry) => sum + entry.quantity, 0);
+  const emptyTypes = { Terrenos: 0, Criaturas: 0, Artefatos: 0, Encantamentos: 0, Instantaneas: 0, Feiticos: 0, Planeswalkers: 0 };
+  const emptyRoles = { Ramp: 0, Compra: 0, Remocao: 0, Protecao: 0, Recursao: 0 };
+  const emptyCurve = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+
+  return {
+    summary: {
+      total,
+      foundTotal: 0,
+      colors: "Nao identificado",
+      averageManaValue: "-",
+      notFound: entries.map((entry) => entry.name)
+    },
+    types: emptyTypes,
+    roles: emptyRoles,
+    curve: emptyCurve,
+    advice: [
+      "Nao consegui consultar o banco de cartas agora, entao esta leitura ficou limitada aos nomes da lista.",
+      total < 90
+        ? "A lista parece incompleta para Commander. Mire 100 cartas contando o comandante."
+        : "A quantidade geral parece fechada. Quando a consulta voltar, o grimorio consegue avaliar curva, tipos e funcoes com mais precisao."
+    ],
+    corvoNote: "O grimorio abriu a pagina, mas a consulta externa falhou. A leitura basica continua disponivel para voce nao ficar parado.",
+    apiWarning: String(error?.message || error || "Erro desconhecido").slice(0, 180)
+  };
 }
 
 function buildDeckReport(entries, cardResult) {

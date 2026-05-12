@@ -647,6 +647,10 @@ body[data-account-mode="member"] .hero-line {
   color: rgba(255, 248, 232, 0.92);
 }
 
+body[data-account-mode="member"] .member-portal {
+  margin-top: 46px;
+}
+
 body[data-account-mode="member"] .hero-orbit {
   right: max(18px, 6vw);
   bottom: clamp(64px, 8vh, 92px);

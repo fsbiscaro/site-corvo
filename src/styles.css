@@ -674,6 +674,20 @@ body[data-account-mode="member"] .hero-corvo {
   width: min(1360px, calc(100vw - 36px));
 }
 
+#decks.chapter-view {
+  width: min(1240px, calc(100vw - 36px));
+}
+
+#decks .chapter-hero {
+  min-height: 156px;
+  margin-bottom: 4px;
+  padding: 18px 0 10px;
+}
+
+#decks .chapter-hero h2 {
+  font-size: clamp(2.8rem, 5.4vw, 4.8rem);
+}
+
 .chapter-hero {
   position: relative;
   isolation: isolate;
@@ -716,6 +730,190 @@ body[data-account-mode="member"] .hero-corvo {
   grid-template-columns: minmax(300px, 430px) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
+}
+
+.deck-grimoire-stage {
+  position: relative;
+  isolation: isolate;
+  width: min(960px, 100%);
+  aspect-ratio: 892 / 636;
+  margin: -10px auto 0;
+}
+
+.deck-grimoire-stage::before,
+.deck-grimoire-stage::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+.deck-grimoire-stage::before {
+  left: 50%;
+  top: 54%;
+  width: 80%;
+  height: 48%;
+  background: radial-gradient(ellipse, rgba(245, 212, 119, 0.18), rgba(65, 27, 77, 0.16) 44%, transparent 72%);
+  filter: blur(34px);
+  translate: -50% -50%;
+}
+
+.deck-grimoire-stage::after {
+  left: 50%;
+  bottom: 4%;
+  width: 84%;
+  height: 18%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.58), transparent 70%);
+  filter: blur(18px);
+  translate: -50% 0;
+}
+
+.open-grimoire-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter:
+    drop-shadow(0 34px 42px rgba(0, 0, 0, 0.48))
+    drop-shadow(0 0 28px rgba(245, 212, 119, 0.12));
+}
+
+.deck-page {
+  position: absolute;
+  z-index: 2;
+  color: #322416;
+  text-shadow: none;
+}
+
+.deck-page-input {
+  left: 7.5%;
+  top: 17%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  width: 39%;
+  height: 64%;
+  padding: 8px 18px 12px 24px;
+  transform: rotate(-0.7deg);
+}
+
+.deck-page-output {
+  left: 53.6%;
+  top: 16.5%;
+  width: 38%;
+  height: 64%;
+  padding: 12px 24px 18px 18px;
+  overflow: auto;
+  transform: rotate(0.35deg);
+  line-height: 1.42;
+}
+
+.deck-page-output::-webkit-scrollbar {
+  width: 6px;
+}
+
+.deck-page-output::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(92, 62, 30, 0.34);
+}
+
+.deck-page label {
+  height: 100%;
+  min-height: 0;
+  color: #5a3c1d;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.deck-page label span {
+  color: #463018;
+}
+
+.deck-page-input textarea {
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  border-color: rgba(78, 49, 22, 0.2);
+  border-radius: 14px;
+  color: #2d2115;
+  background: rgba(255, 252, 220, 0.2);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 12px 34px rgba(111, 79, 29, 0.08);
+  font-weight: 800;
+}
+
+.deck-page-input textarea::placeholder {
+  color: rgba(47, 35, 22, 0.48);
+}
+
+.deck-page-input textarea:focus {
+  border-color: rgba(125, 75, 24, 0.5);
+  box-shadow:
+    0 0 0 4px rgba(125, 75, 24, 0.1),
+    inset 0 12px 34px rgba(111, 79, 29, 0.08);
+}
+
+.deck-page-input .primary-action {
+  min-height: 42px;
+  color: #2b190d;
+  border-color: rgba(87, 54, 20, 0.28);
+  background: linear-gradient(135deg, #fff0aa, #e7bc55 52%, #b86b24);
+  box-shadow: 0 12px 24px rgba(86, 46, 16, 0.18);
+}
+
+.deck-page-output h3 {
+  margin: 0 0 8px;
+  color: #3b2614;
+  font-size: 1.15rem;
+}
+
+.deck-page-output p,
+.deck-page-output li,
+.deck-page-output dd {
+  color: rgba(45, 32, 18, 0.92);
+}
+
+.deck-page-output p {
+  margin-top: 0;
+}
+
+.deck-page-output .deck-stats {
+  gap: 8px;
+}
+
+.deck-page-output .deck-stats dt {
+  color: #83511c;
+}
+
+.deck-page-output .deck-stats dd {
+  margin-bottom: 2px;
+}
+
+.deck-page-output .deck-advice {
+  padding-left: 19px;
+}
+
+.deck-page-output .bar-row {
+  grid-template-columns: 68px minmax(0, 1fr) 28px;
+  gap: 8px;
+  color: rgba(45, 32, 18, 0.78);
+  font-size: 0.82rem;
+}
+
+.deck-page-output .bar-track {
+  height: 10px;
+  background: rgba(76, 48, 20, 0.16);
+}
+
+.deck-page-output .bar-fill {
+  background: linear-gradient(90deg, #6f3623, #c8892f, #6f8c55);
 }
 
 .spell-form,
@@ -1884,13 +2082,16 @@ pre {
   line-height: 1.55;
 }
 
-.spell-form.is-locked {
+.spell-form.is-locked,
+.deck-page-input.is-locked {
   opacity: 0.58;
   filter: saturate(0.7);
 }
 
 .spell-form.is-locked textarea,
-.spell-form.is-locked button[type="submit"] {
+.spell-form.is-locked button[type="submit"],
+.deck-page-input.is-locked textarea,
+.deck-page-input.is-locked button[type="submit"] {
   cursor: not-allowed;
 }
 
@@ -2588,6 +2789,80 @@ pre {
   .chapter-hero::before {
     inset: -18px 0;
     background-size: min(360px, 92vw) auto;
+  }
+
+  #decks .chapter-hero {
+    min-height: auto;
+    margin-bottom: 8px;
+    padding: 12px 0 4px;
+  }
+
+  #decks .chapter-hero h2 {
+    font-size: clamp(2.65rem, 13vw, 3.85rem);
+  }
+
+  .chapter-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .deck-grimoire-stage {
+    display: grid;
+    gap: 14px;
+    width: 100%;
+    aspect-ratio: auto;
+    margin-top: 8px;
+    padding-top: clamp(168px, 46vw, 232px);
+  }
+
+  .deck-grimoire-stage::before {
+    top: 116px;
+    width: 112%;
+    height: 220px;
+  }
+
+  .deck-grimoire-stage::after {
+    top: clamp(154px, 42vw, 214px);
+    bottom: auto;
+    width: 92%;
+  }
+
+  .open-grimoire-art {
+    inset: 0 auto auto 50%;
+    width: min(520px, 118vw);
+    height: auto;
+    max-width: none;
+    opacity: 0.64;
+    transform: translateX(-50%);
+  }
+
+  .deck-page {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 100%;
+    height: auto;
+    padding: 18px;
+    border: 1px solid rgba(112, 74, 33, 0.3);
+    border-radius: 18px;
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.18), transparent 34%),
+      linear-gradient(180deg, rgba(244, 234, 178, 0.96), rgba(223, 210, 143, 0.96));
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.36);
+    transform: none;
+  }
+
+  .deck-page-input {
+    min-height: 420px;
+  }
+
+  .deck-page-input textarea {
+    min-height: 310px;
+  }
+
+  .deck-page-output {
+    min-height: 320px;
+    max-height: none;
   }
 
   .chapter-lead {

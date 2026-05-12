@@ -269,16 +269,18 @@
           <button class="primary-action" type="button" data-auth-open>Entrar como membro</button>
         </section>
 
-        <div class="spell-layout">
-          <form class="spell-form reveal" id="deckForm" data-deck-member-tool>
+        <div class="deck-grimoire-stage reveal">
+          <img class="open-grimoire-art" src="assets/brand/open-grimoire-pages.png" alt="" aria-hidden="true" draggable="false" />
+
+          <form class="deck-page deck-page-input" id="deckForm" data-deck-member-tool>
             <label>
-              Decklist
+              <span>Decklist</span>
               <textarea id="deckInput" rows="18" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Command Tower"></textarea>
             </label>
             <button class="primary-action full" type="submit">Analisar deck</button>
           </form>
 
-          <article class="manuscript deck-output reveal" id="deckOutput">
+          <article class="deck-page deck-page-output deck-output" id="deckOutput">
             <p>A leitura do deck aparece aqui.</p>
           </article>
         </div>

@@ -49,6 +49,7 @@ async function health(env) {
     try {
       await env.DB.prepare("SELECT 1 FROM users LIMIT 1").first();
       await env.DB.prepare("SELECT 1 FROM sessions LIMIT 1").first();
+      await env.DB.prepare("SELECT 1 FROM deck_analyses LIMIT 1").first();
       payload.schemaReady = true;
     } catch (error) {
       payload.schemaReady = false;
@@ -197,7 +198,7 @@ async function analyzeDeck(request, env) {
   const report = buildDeckReport(entries, cards);
   report.aiText = await generateAiDeckReading(env, report, entries);
   report.aiEnabled = Boolean(report.aiText);
-  await saveDeckAnalysis(env, user.id, decklist, report);
+  report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
   return json(report);
 }
 
@@ -450,10 +451,16 @@ function extractOpenAiText(data) {
   return pieces.join("\n\n");
 }
 async function saveDeckAnalysis(env, userId, decklist, report) {
-  if (!env.DB) return;
-  await env.DB.prepare(
-    "INSERT INTO deck_analyses (id, user_id, decklist, report_json, created_at) VALUES (?, ?, ?, ?, ?)"
-  ).bind(crypto.randomUUID(), userId, decklist, JSON.stringify(report), new Date().toISOString()).run();
+  if (!env.DB) return false;
+  try {
+    await env.DB.prepare(
+      "INSERT INTO deck_analyses (id, user_id, decklist, report_json, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(crypto.randomUUID(), userId, decklist, JSON.stringify(report), new Date().toISOString()).run();
+    return true;
+  } catch (error) {
+    console.error("Deck analysis history save failed", error);
+    return false;
+  }
 }
 
 async function readJson(request) {

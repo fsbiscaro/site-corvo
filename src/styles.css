@@ -527,7 +527,7 @@ h3 {
   display: grid;
   justify-items: center;
   width: min(360px, 78vw);
-  min-height: 360px;
+  min-height: 330px;
   padding: 0;
   color: var(--text);
   text-align: center;
@@ -608,44 +608,6 @@ h3 {
   width: 100%;
   user-select: none;
   pointer-events: none;
-}
-
-.book-caption {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  margin-top: -4px;
-  padding: 0 16px;
-  color: rgba(255, 248, 232, 0.86);
-  font-size: 0.88rem;
-  font-weight: 900;
-  border: 1px solid rgba(255, 236, 188, 0.18);
-  border-radius: 999px;
-  background: rgba(18, 10, 22, 0.58);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(12px);
-}
-
-.member-portal-notes {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.member-portal-notes span {
-  display: inline-grid;
-  place-items: center;
-  min-height: 34px;
-  padding: 0 13px;
-  color: rgba(255, 248, 232, 0.82);
-  font-size: 0.78rem;
-  font-weight: 900;
-  border: 1px solid rgba(245, 212, 119, 0.18);
-  border-radius: 999px;
-  background: rgba(255, 248, 232, 0.055);
 }
 
 body[data-account-mode="member"] .hero-stage {
@@ -2942,7 +2904,7 @@ pre {
 
   .grimoire-book {
     width: min(310px, 84vw);
-    min-height: 372px;
+    min-height: 310px;
   }
 
   .book-art-frame {
@@ -2952,17 +2914,6 @@ pre {
 
   .book-aura {
     width: 106%;
-  }
-
-  .book-caption {
-    max-width: 260px;
-    min-height: 36px;
-    padding: 8px 14px;
-    line-height: 1.25;
-  }
-
-  .member-portal-notes {
-    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {

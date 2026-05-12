@@ -884,6 +884,15 @@ body[data-account-mode="member"] .hero-corvo {
   margin-top: 0;
 }
 
+.deck-fallback-note {
+  padding: 9px 11px;
+  border: 1px solid rgba(131, 81, 28, 0.24);
+  border-radius: 13px;
+  background: rgba(131, 81, 28, 0.08);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
 .deck-page-output .deck-stats {
   gap: 8px;
 }

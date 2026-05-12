@@ -295,7 +295,7 @@ function renderDeckLockedOutput() {
   `;
 }
 
-async function analyzeDeckWithApi(decklist) {
+async function analyzeDeckWithApi(decklist, fallbackNames = []) {
   const output = document.querySelector("#deckOutput");
   output.innerHTML = "<p>Consultando o grimorio e lendo sua lista...</p>";
 
@@ -314,6 +314,14 @@ async function analyzeDeckWithApi(decklist) {
     if (!response.ok) throw new Error(report.error || "Nao foi possivel analisar o deck agora.");
     output.innerHTML = renderDeckApiReport(report);
   } catch (error) {
+    if (fallbackNames.length) {
+      await analyzeDeck(fallbackNames);
+      output.insertAdjacentHTML(
+        "afterbegin",
+        '<p class="deck-fallback-note">A leitura completa tropeçou por enquanto, então deixei uma análise básica para você não ficar parado.</p>'
+      );
+      return;
+    }
     output.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
   }
 }
@@ -1358,7 +1366,7 @@ document.querySelector("#deckForm").addEventListener("submit", async (event) => 
   }
 
   if (authState.offline) await analyzeDeck(lines);
-  else await analyzeDeckWithApi(deckText);
+  else await analyzeDeckWithApi(deckText, lines);
 });
 
 function parseDecklist(text) {

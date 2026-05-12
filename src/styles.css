@@ -2230,6 +2230,71 @@ pre {
   font-weight: 800;
 }
 
+.deck-page-output {
+  color: #2c1d0f;
+  font-size: 0.94rem;
+  font-weight: 760;
+}
+
+.deck-page-output .corvo-note,
+.deck-page-output .ai-reading,
+.deck-page-output .deck-fallback-note {
+  border-color: rgba(116, 70, 23, 0.28);
+  color: #2c1d0f;
+  background: rgba(247, 226, 154, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(255, 250, 206, 0.22);
+}
+
+.deck-page-output .corvo-note {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-left: 3px solid #8a551d;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.deck-page-output h3 {
+  color: #704215;
+  text-shadow: 0 1px 0 rgba(255, 246, 186, 0.45);
+}
+
+.deck-page-output p,
+.deck-page-output li,
+.deck-page-output dd,
+.deck-page-output .deck-stats dd,
+.deck-page-output .deck-advice li,
+.deck-page-output .ai-reading p,
+.deck-page-output .bar-row {
+  color: #2c1d0f;
+}
+
+.deck-page-output .deck-stats dt {
+  color: #81501b;
+}
+
+.deck-page-output .deck-advice {
+  gap: 8px;
+}
+
+.deck-page-output .deck-advice li {
+  padding-left: 2px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.deck-page-output .ai-reading p {
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.deck-page-output .bar-track {
+  background: rgba(91, 61, 24, 0.2);
+}
+
+.deck-page-output .bar-fill {
+  background: linear-gradient(90deg, #6d361f, #b67324 48%, #5f814d);
+}
+
 
 
 

@@ -275,7 +275,7 @@ function updateDeckGate() {
   if (gate) gate.hidden = canUseDeck;
   if (form) {
     form.classList.toggle("is-locked", !canUseDeck);
-    form.querySelectorAll("textarea, button[type='submit']").forEach((field) => {
+    form.querySelectorAll("textarea, input, select, button[type='submit']").forEach((field) => {
       field.disabled = !canUseDeck;
     });
   }
@@ -283,6 +283,7 @@ function updateDeckGate() {
     chip.textContent = canUseDeck ? "Acesso liberado" : "Acesso de membro";
     chip.classList.toggle("is-open", canUseDeck);
   }
+  updateDeckAnalyzeButton();
   if (!canUseDeck && document.body.dataset.view === "decks") renderDeckLockedOutput();
 }
 
@@ -295,15 +296,22 @@ function renderDeckLockedOutput() {
   `;
 }
 
-async function analyzeDeckWithApi(decklist, fallbackNames = []) {
+async function analyzeDeckWithApi({ decklist, format, commander, submitButton }) {
   const output = document.querySelector("#deckOutput");
-  output.innerHTML = "<p>Consultando o grimorio e lendo sua lista...</p>";
+  const loadingMessages = ["Lendo lista...", "Cruzando com database local...", "Calculando estatísticas...", "Gerando diagnóstico..."];
+  let loadingIndex = 0;
+  output.innerHTML = `<p>${loadingMessages[loadingIndex]}</p>`;
+  const loadingTimer = window.setInterval(() => {
+    loadingIndex = Math.min(loadingIndex + 1, loadingMessages.length - 1);
+    output.innerHTML = `<p>${loadingMessages[loadingIndex]}</p>`;
+  }, 850);
+  if (submitButton) submitButton.disabled = true;
 
   try {
     const response = await fetch(`${API_BASE}/decks/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ decklist })
+      body: JSON.stringify({ deck_text: decklist, format, commander, use_ai: false })
     });
     const report = await response.json();
     if (response.status === 401) {
@@ -311,18 +319,14 @@ async function analyzeDeckWithApi(decklist, fallbackNames = []) {
       openAuthModal();
       return;
     }
-    if (!response.ok) throw new Error(report.error || "Nao foi possivel analisar o deck agora.");
+    if (!response.ok && report.status !== "error") throw new Error(report.error || "Nao foi possivel analisar o deck agora.");
     output.innerHTML = renderDeckApiReport(report);
   } catch (error) {
-    if (fallbackNames.length) {
-      await analyzeDeck(fallbackNames);
-      output.insertAdjacentHTML(
-        "afterbegin",
-        '<p class="deck-fallback-note">A leitura completa tropeçou por enquanto, então deixei uma análise básica para você não ficar parado.</p>'
-      );
-      return;
-    }
     output.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
+  } finally {
+    window.clearInterval(loadingTimer);
+    if (submitButton) submitButton.disabled = false;
+    updateDeckAnalyzeButton();
   }
 }
 
@@ -331,6 +335,8 @@ function renderDeckApiReport(report) {
   const verdict = report.verdict || {};
   const identity = report.identity || {};
   return `
+    ${renderDeckMessages(report.errors || [], "error")}
+    ${renderDeckMessages(report.warnings || [], "warning")}
     <blockquote class="corvo-note">${escapeHtml(report.corvoNote || "O grimorio terminou a leitura.")}</blockquote>
     ${verdict.title ? `
       <section class="deck-verdict">
@@ -351,7 +357,7 @@ function renderDeckApiReport(report) {
     ${report.aiText ? `<h3>Leitura com IA</h3><div class="ai-reading">${renderAiText(report.aiText)}</div>` : ""}
     <h3>Resumo</h3>
     <dl class="deck-stats">
-      <dt>Total</dt><dd>${summary.total ?? 0} cartas na lista, ${summary.foundTotal ?? 0} encontradas no Scryfall</dd>
+      <dt>Total</dt><dd>${summary.total ?? 0} cartas na lista, ${summary.foundTotal ?? 0} reconhecidas no catálogo local</dd>
       <dt>Cores</dt><dd>${escapeHtml(summary.colors || "Incolor / nao identificado")}</dd>
       <dt>Valor medio de mana</dt><dd>${escapeHtml(summary.averageManaValue ?? "-")}</dd>
       <dt>Tipos</dt><dd>${formatObject(report.types || {})}</dd>
@@ -365,6 +371,16 @@ function renderDeckApiReport(report) {
     ${renderDeckList("Plano de teste", report.playtest)}
     <h3>Curva de mana</h3>
     <div class="deck-bars">${renderCurveBars(report.curve || {})}</div>
+  `;
+}
+
+function renderDeckMessages(items, tone) {
+  if (!Array.isArray(items) || !items.length) return "";
+  const className = tone === "error" ? "deck-message is-error" : "deck-message is-warning";
+  return `
+    <div class="${className}">
+      ${items.map((item) => `<p>${escapeHtml(item.message || item.error || item)}</p>`).join("")}
+    </div>
   `;
 }
 
@@ -1393,7 +1409,205 @@ function sanitizeFileName(value) {
     .toLowerCase();
 }
 
+const commanderFormats = new Set(["commander", "brawl", "historic_brawl"]);
+const deckFormatInput = document.querySelector("#deckFormat");
+const deckCommanderInput = document.querySelector("#deckCommander");
+const commanderPicker = document.querySelector("#commanderPicker");
+const commanderSuggestions = document.querySelector("#commanderSuggestions");
+const selectedCommanderPanel = document.querySelector("#selectedCommander");
+let selectedCommanderCard = null;
+let commanderSuggestionTimer = 0;
+let commanderSuggestionAbortController = null;
+let commanderSuggestionCards = [];
+
+deckFormatInput?.addEventListener("change", () => {
+  if (!isCommanderFormat()) clearSelectedCommander();
+  updateCommanderPicker();
+  updateDeckAnalyzeButton();
+});
+
+deckCommanderInput?.addEventListener("input", () => {
+  selectedCommanderCard = null;
+  renderSelectedCommander();
+  window.clearTimeout(commanderSuggestionTimer);
+  const query = deckCommanderInput.value.trim();
+  if (query.length < 2) {
+    hideCommanderSuggestions();
+    updateDeckAnalyzeButton();
+    return;
+  }
+  commanderSuggestionTimer = window.setTimeout(() => fetchCommanderSuggestions(query), 220);
+  updateDeckAnalyzeButton();
+});
+
+deckCommanderInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hideCommanderSuggestions();
+});
+
+commanderSuggestions?.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-commander-id]");
+  if (!option) return;
+  const card = commanderSuggestionCards.find((item) => item.id === option.dataset.commanderId);
+  if (card) selectCommanderCard(card);
+});
+
+selectedCommanderPanel?.addEventListener("click", (event) => {
+  if (event.target.closest("[data-clear-commander]")) clearSelectedCommander();
+});
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#commanderPicker")) hideCommanderSuggestions();
+});
+
+document.querySelector("#deckInput")?.addEventListener("input", updateDeckAnalyzeButton);
+
+function isCommanderFormat() {
+  return commanderFormats.has(deckFormatInput?.value || "");
+}
+
+function updateCommanderPicker() {
+  if (!commanderPicker) return;
+  const required = isCommanderFormat();
+  commanderPicker.hidden = !required;
+  deckCommanderInput?.toggleAttribute("required", required);
+}
+
+function updateDeckAnalyzeButton() {
+  const button = document.querySelector("#deckForm button[type='submit']");
+  const deckInput = document.querySelector("#deckInput");
+  if (!button || !deckInput) return;
+  const needsCommander = isCommanderFormat();
+  const blocked = !hasFeature("decks") || !deckInput.value.trim() || (needsCommander && !selectedCommanderCard);
+  button.disabled = blocked;
+  if (needsCommander && !selectedCommanderCard) button.title = "Selecione seu comandante antes de analisar o deck.";
+  else button.removeAttribute("title");
+}
+
+async function fetchCommanderSuggestions(query) {
+  if (commanderSuggestionAbortController) commanderSuggestionAbortController.abort();
+  commanderSuggestionAbortController = new AbortController();
+  renderCommanderSuggestionNote("Procurando comandantes...");
+
+  try {
+    const cards = await fetchSuggestionCandidates(query, commanderSuggestionAbortController.signal);
+    commanderSuggestionCards = rankCardSuggestions(cards.filter(isCommanderCandidate), query).slice(0, 8);
+    renderCommanderSuggestions(commanderSuggestionCards, query);
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    commanderSuggestionCards = [];
+    renderCommanderSuggestionNote("Não consegui buscar comandantes agora.");
+  }
+}
+
+function isCommanderCandidate(card) {
+  const type = card.type_line || card.card_faces?.map((face) => face.type_line || "").join(" ") || "";
+  const oracle = card.oracle_text || card.card_faces?.map((face) => face.oracle_text || "").join(" ") || "";
+  return (type.includes("Legendary") && type.includes("Creature")) || oracle.toLowerCase().includes("can be your commander");
+}
+
+function renderCommanderSuggestions(cards, query) {
+  if (!commanderSuggestions) return;
+  if (!cards.length) {
+    renderCommanderSuggestionNote(`Nenhum comandante encontrado para "${query}".`);
+    return;
+  }
+
+  commanderSuggestions.innerHTML = cards.map((card) => {
+    const image = getCardImage(card, "small") || getCardImage(card, "normal") || "";
+    const displayName = getCardDisplayName(card);
+    const secondaryName = getCardSecondaryName(card);
+    const type = card.printed_type_line || card.type_line || "";
+    const colors = formatColorIdentity(card.color_identity || []);
+    return `
+      <button class="card-suggestion" type="button" role="option" data-commander-id="${escapeHtml(card.id)}">
+        ${image ? `<img class="suggestion-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" />` : '<span class="suggestion-thumb suggestion-thumb-empty"></span>'}
+        <span class="suggestion-copy">
+          <strong>${escapeHtml(displayName)}</strong>
+          <span>${escapeHtml([secondaryName, type, colors].filter(Boolean).join(" · "))}</span>
+        </span>
+      </button>
+    `;
+  }).join("");
+  commanderSuggestions.classList.add("open");
+  deckCommanderInput?.setAttribute("aria-expanded", "true");
+}
+
+function renderCommanderSuggestionNote(text) {
+  if (!commanderSuggestions) return;
+  commanderSuggestions.innerHTML = `<div class="suggestion-note">${escapeHtml(text)}</div>`;
+  commanderSuggestions.classList.add("open");
+}
+
+function hideCommanderSuggestions() {
+  window.clearTimeout(commanderSuggestionTimer);
+  if (commanderSuggestionAbortController) {
+    commanderSuggestionAbortController.abort();
+    commanderSuggestionAbortController = null;
+  }
+  commanderSuggestions?.classList.remove("open");
+  if (commanderSuggestions) commanderSuggestions.innerHTML = "";
+}
+
+function selectCommanderCard(card) {
+  selectedCommanderCard = card;
+  if (deckCommanderInput) deckCommanderInput.value = getCardDisplayName(card);
+  hideCommanderSuggestions();
+  renderSelectedCommander();
+  updateDeckAnalyzeButton();
+}
+
+function clearSelectedCommander() {
+  selectedCommanderCard = null;
+  if (deckCommanderInput) deckCommanderInput.value = "";
+  renderSelectedCommander();
+  updateDeckAnalyzeButton();
+}
+
+function renderSelectedCommander() {
+  if (!selectedCommanderPanel) return;
+  if (!selectedCommanderCard) {
+    selectedCommanderPanel.hidden = true;
+    selectedCommanderPanel.innerHTML = "";
+    return;
+  }
+
+  const image = getCardImage(selectedCommanderCard, "small") || getCardImage(selectedCommanderCard, "normal") || "";
+  selectedCommanderPanel.hidden = false;
+  selectedCommanderPanel.innerHTML = `
+    ${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" />` : "<span></span>"}
+    <span>
+      <strong>${escapeHtml(getCardDisplayName(selectedCommanderCard))}</strong>
+      <span>${escapeHtml(formatColorIdentity(selectedCommanderCard.color_identity || []))}</span>
+    </span>
+    <button type="button" data-clear-commander aria-label="Remover comandante">X</button>
+  `;
+}
+
+function buildCommanderPayload() {
+  if (!selectedCommanderCard) return null;
+  return {
+    id: selectedCommanderCard.id || null,
+    name: selectedCommanderCard.name,
+    printed_name: selectedCommanderCard.printed_name || selectedCommanderCard.card_faces?.[0]?.printed_name || "",
+    manaValue: selectedCommanderCard.cmc ?? null,
+    typeLine: selectedCommanderCard.type_line || selectedCommanderCard.card_faces?.[0]?.type_line || "",
+    colors: selectedCommanderCard.colors || [],
+    colorIdentity: selectedCommanderCard.color_identity || [],
+    imageUrl: getCardImage(selectedCommanderCard, "normal") || "",
+    thumbnailUrl: getCardImage(selectedCommanderCard, "small") || getCardImage(selectedCommanderCard, "normal") || "",
+    canBeCommander: isCommanderCandidate(selectedCommanderCard)
+  };
+}
+
+function formatColorIdentity(colors) {
+  const labels = { W: "Branco", U: "Azul", B: "Preto", R: "Vermelho", G: "Verde" };
+  return colors?.length ? colors.map((color) => labels[color] || color).join(", ") : "Incolor";
+}
+
 document.querySelector("#loadSampleDeck").addEventListener("click", () => {
+  deckFormatInput.value = "casual";
+  updateCommanderPicker();
+  clearSelectedCommander();
   document.querySelector("#deckInput").value = `1 Alela, Artful Provocateur
 1 Sol Ring
 1 Arcane Signet
@@ -1411,6 +1625,7 @@ document.querySelector("#loadSampleDeck").addEventListener("click", () => {
 1 Island
 1 Plains
 1 Swamp`;
+  updateDeckAnalyzeButton();
 });
 
 document.querySelector("#deckForm").addEventListener("submit", async (event) => {
@@ -1428,8 +1643,19 @@ document.querySelector("#deckForm").addEventListener("submit", async (event) => 
     return;
   }
 
+  if (isCommanderFormat() && !selectedCommanderCard) {
+    document.querySelector("#deckOutput").innerHTML = '<p class="error-text">Selecione seu comandante antes de analisar o deck.</p>';
+    updateDeckAnalyzeButton();
+    return;
+  }
+
   if (authState.offline) await analyzeDeck(lines);
-  else await analyzeDeckWithApi(deckText, lines);
+  else await analyzeDeckWithApi({
+    decklist: deckText,
+    format: deckFormatInput.value,
+    commander: buildCommanderPayload(),
+    submitButton: event.submitter || event.currentTarget.querySelector("button[type='submit']")
+  });
 });
 
 function parseDecklist(text) {
@@ -1595,4 +1821,6 @@ function initVisualEffects() {
 renderMetrics();
 renderTopics();
 initVisualEffects();
+updateCommanderPicker();
+updateDeckAnalyzeButton();
 initAuth();

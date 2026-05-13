@@ -5,6 +5,8 @@ import { buildDeckSummary } from "./statistics.js";
 export { flattenDeckForAnalysis, parseDeckText } from "./parser.js";
 export { buildDeckSummary } from "./statistics.js";
 export { runBasicDiagnostics } from "./diagnostics.js";
+export { analyzeDeckRequest, generateDatabaseDraftForUnknownCards } from "./analysis.js";
+export { findCatalogCards, normalizeCardName, resolveCommanderCard } from "./catalog.js";
 
 export function parseDeckRequest(deckText, format = "casual") {
   const parsed = parseDeckText(deckText);

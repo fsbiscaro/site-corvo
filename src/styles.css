@@ -794,12 +794,91 @@ body[data-account-mode="member"] .hero-corvo {
   left: 7.5%;
   top: 17%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
   width: 39%;
   height: 64%;
   padding: 8px 18px 12px 24px;
   transform: rotate(-0.7deg);
+}
+
+.deck-config {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+}
+
+.deck-config label {
+  gap: 4px;
+}
+
+.deck-config select,
+.deck-config input {
+  height: 34px;
+  border-radius: 12px;
+  color: #2d2115;
+  background: rgba(255, 252, 220, 0.38);
+  border-color: rgba(78, 49, 22, 0.22);
+  font-weight: 850;
+}
+
+.commander-picker {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.commander-picker[hidden] {
+  display: none;
+}
+
+.commander-suggestions {
+  top: calc(100% - 4px);
+  left: 0;
+  right: 0;
+  max-height: 190px;
+  color: var(--text);
+  transform: none;
+  z-index: 12;
+}
+
+.selected-commander {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid rgba(95, 57, 21, 0.2);
+  border-radius: 13px;
+  color: #342414;
+  background: rgba(255, 252, 220, 0.36);
+}
+
+.selected-commander img {
+  width: 34px;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  border-radius: 5px;
+  box-shadow: 0 4px 10px rgba(55, 31, 12, 0.24);
+}
+
+.selected-commander strong,
+.selected-commander span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-commander button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  color: #4a2a17;
+  border: 1px solid rgba(95, 57, 21, 0.2);
+  background: rgba(255, 248, 232, 0.46);
 }
 
 .deck-page-output {
@@ -891,6 +970,30 @@ body[data-account-mode="member"] .hero-corvo {
   background: rgba(131, 81, 28, 0.08);
   font-size: 0.86rem;
   font-weight: 900;
+}
+
+.deck-message {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.deck-message p {
+  margin: 0;
+}
+
+.deck-message.is-error {
+  border: 1px solid rgba(138, 40, 40, 0.28);
+  background: rgba(138, 40, 40, 0.12);
+}
+
+.deck-message.is-warning {
+  border: 1px solid rgba(131, 81, 28, 0.24);
+  background: rgba(131, 81, 28, 0.08);
 }
 
 .deck-page-output .deck-stats {

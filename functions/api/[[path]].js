@@ -1,5 +1,5 @@
 import { BASIC_LANDS_PT, PT_CARD_ALIASES } from "../../server/deck-analyzer/card-aliases.js";
-import { flattenDeckForAnalysis, parseDeckRequest, parseDeckText } from "../../server/deck-analyzer/index.js";
+import { analyzeDeckRequest, flattenDeckForAnalysis, parseDeckRequest, parseDeckText } from "../../server/deck-analyzer/index.js";
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
@@ -8,6 +8,9 @@ const SCRYFALL_HEADERS = {
   Accept: "application/json",
   "User-Agent": "GrimorioDoCorvo/1.0 (site-corvo.fsbiscaro.workers.dev)"
 };
+const SCRYFALL_LOOKUP_BUDGET_MS = 12000;
+const SCRYFALL_FETCH_TIMEOUT_MS = 3500;
+const FUZZY_FALLBACK_LIMIT = 10;
 const ROLE_FEATURES = {
   admin: ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"],
   member: ["dashboard", "decks", "deck_ai"],
@@ -50,7 +53,7 @@ async function health(env) {
   const payload = {
     ok: true,
     name: "Grimorio do Corvo API",
-    version: "2026-05-13.4",
+    version: "2026-05-13.6",
     dbConfigured: Boolean(env.DB),
     adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
     schemaReady: false
@@ -201,24 +204,20 @@ async function analyzeDeck(request, env) {
   if (user instanceof Response) return user;
 
   const body = await readJson(request);
-  const decklist = String(body.decklist || "");
+  const decklist = String(body.deck_text ?? body.deckText ?? body.decklist ?? "");
+  const format = String(body.format || "casual");
+  const report = await analyzeDeckRequest({
+    deckText: decklist,
+    format,
+    commander: body.commander || null
+  }, { env, requestUrl: request.url });
+
   const parsedDeck = parseDeckText(decklist);
   const entries = flattenDeckForAnalysis(parsedDeck);
-  if (!entries.length) return json({ error: "Cole uma decklist valida." }, { status: 400 });
-
-  let report;
-  try {
-    const cards = await fetchCards(entries);
-    report = buildDeckReport(entries, cards);
-  } catch (error) {
-    console.error("Deck card lookup failed", error);
-    report = buildNameOnlyDeckReport(entries, error);
-  }
-
-  report.aiText = await generateAiDeckReading(env, report, entries);
+  if (body.use_ai && report.status !== "error") report.aiText = await generateAiDeckReading(env, report, entries);
   report.aiEnabled = Boolean(report.aiText);
   report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
-  return json(report);
+  return json(report, { status: report.status === "error" ? 400 : 200 });
 }
 
 async function parseDeckAnalyzer(request) {
@@ -289,25 +288,28 @@ function featuresForUser(user) {
 }
 
 async function fetchCards(entries) {
+  const deadline = Date.now() + SCRYFALL_LOOKUP_BUDGET_MS;
   const uniqueEntries = mergeDeckEntries(entries);
   for (const entry of uniqueEntries) {
     entry.lookupName = PT_CARD_ALIASES.get(entry.key) || BASIC_LANDS_PT.get(entry.key) || entry.name;
   }
-  const uniqueNames = uniqueEntries.map((entry) => entry.name);
   const chunks = [];
-  for (let i = 0; i < uniqueNames.length; i += 75) chunks.push(uniqueNames.slice(i, i + 75));
+  for (let i = 0; i < uniqueEntries.length; i += 75) chunks.push(uniqueEntries.slice(i, i + 75));
 
   const resolvedCards = new Map();
   const unresolved = new Map(uniqueEntries.map((entry) => [entry.key, entry]));
   for (const chunk of chunks) {
-    const response = await fetch("https://api.scryfall.com/cards/collection", {
+    if (timeExpired(deadline)) break;
+    const response = await fetchWithTimeout("https://api.scryfall.com/cards/collection", {
       method: "POST",
       headers: { ...SCRYFALL_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ identifiers: chunk.map((name) => ({ name: uniqueEntries.find((entry) => entry.name === name)?.lookupName || name })) })
-    });
+      body: JSON.stringify({ identifiers: chunk.map((entry) => ({ name: entry.lookupName || entry.name })) })
+    }, deadline);
+    if (!response) break;
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      throw new Error(`Nao consegui consultar o Scryfall agora. Status ${response.status}. ${detail.slice(0, 120)}`);
+      console.error("Scryfall collection failed", response.status, detail.slice(0, 160));
+      continue;
     }
     const data = await response.json();
     for (const card of data.data || []) {
@@ -318,7 +320,7 @@ async function fetchCards(entries) {
     }
   }
 
-  const fallbackMatches = await resolveCardsByFuzzyName([...unresolved.values()]);
+  const fallbackMatches = await resolveCardsByFuzzyName([...unresolved.values()], deadline);
   for (const { entry, card } of fallbackMatches) {
     resolvedCards.set(entry.key, card);
     unresolved.delete(entry.key);
@@ -370,56 +372,59 @@ function matchCardToEntry(card, unresolved) {
   return "";
 }
 
-async function resolveCardsByFuzzyName(entries) {
+async function resolveCardsByFuzzyName(entries, deadline) {
   if (!entries.length) return [];
   const matches = [];
   const unresolved = new Map(entries.map((entry) => [entry.key, entry]));
-  const batchMatches = await resolveCardsByMultilingualSearch(entries);
+  const batchMatches = await resolveCardsByMultilingualSearch(entries, deadline);
   for (const { entry, card } of batchMatches) {
     matches.push({ entry, card });
     unresolved.delete(entry.key);
   }
 
-  for (const entry of unresolved.values()) {
-    const card = await fetchCardByFuzzyName(entry.name);
+  for (const entry of [...unresolved.values()].slice(0, FUZZY_FALLBACK_LIMIT)) {
+    if (remainingMs(deadline) < 900) break;
+    const card = await fetchCardByFuzzyName(entry.name, deadline);
     if (card) matches.push({ entry, card });
-    await delay(85);
+    await delay(Math.min(60, Math.max(0, remainingMs(deadline))));
   }
   return matches;
 }
 
-async function resolveCardsByMultilingualSearch(entries) {
+async function resolveCardsByMultilingualSearch(entries, deadline) {
   const matches = [];
-  const chunkSize = 10;
+  const chunkSize = 15;
   for (let i = 0; i < entries.length; i += chunkSize) {
+    if (remainingMs(deadline) < 1200) break;
     const chunk = entries.slice(i, i + chunkSize);
     const unresolved = new Map(chunk.map((entry) => [entry.key, entry]));
     const query = `include:multilingual (${chunk.map((entry) => `"${escapeScryfallSearch(entry.name)}"`).join(" or ")})`;
-    const cards = await fetchScryfallSearch(query);
+    const cards = await fetchScryfallSearch(query, deadline);
     for (const card of cards) {
       const key = matchCardToEntry(card, unresolved);
       if (!key) continue;
       matches.push({ entry: unresolved.get(key), card });
       unresolved.delete(key);
     }
-    await delay(120);
+    await delay(Math.min(80, Math.max(0, remainingMs(deadline))));
   }
   return matches;
 }
 
-async function fetchScryfallSearch(query) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=prints&include_multilingual=true`, {
+async function fetchScryfallSearch(query, deadline) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (remainingMs(deadline) < 800) return [];
+    const response = await fetchWithTimeout(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=prints&include_multilingual=true`, {
       headers: SCRYFALL_HEADERS
-    });
+    }, deadline);
+    if (!response) return [];
     if (response.ok) {
       const data = await response.json();
       return data.data || [];
     }
     if (response.status === 400 || response.status === 404) return [];
     if (response.status === 429 || response.status >= 500) {
-      const retryAfter = Number(response.headers.get("Retry-After") || 0);
-      await delay(retryAfter ? retryAfter * 1000 : 500 + attempt * 700);
+      await delay(Math.min(600, Math.max(0, remainingMs(deadline))));
       continue;
     }
     console.error("Scryfall multilingual search failed", response.status, await response.text().catch(() => ""));
@@ -432,16 +437,17 @@ function escapeScryfallSearch(value) {
   return String(value || "").replace(/["\\]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function fetchCardByFuzzyName(name) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, {
+async function fetchCardByFuzzyName(name, deadline) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (remainingMs(deadline) < 800) return null;
+    const response = await fetchWithTimeout(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, {
       headers: SCRYFALL_HEADERS
-    });
+    }, deadline);
+    if (!response) return null;
     if (response.ok) return await response.json();
     if (response.status === 400 || response.status === 404) return null;
     if (response.status === 429 || response.status >= 500) {
-      const retryAfter = Number(response.headers.get("Retry-After") || 0);
-      await delay(retryAfter ? retryAfter * 1000 : 500 + attempt * 700);
+      await delay(Math.min(600, Math.max(0, remainingMs(deadline))));
       continue;
     }
     console.error("Scryfall fuzzy lookup failed", name, response.status, await response.text().catch(() => ""));
@@ -449,6 +455,27 @@ async function fetchCardByFuzzyName(name) {
   }
   console.error("Scryfall fuzzy lookup exhausted retries", name);
   return null;
+}
+
+async function fetchWithTimeout(url, options, deadline) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.min(SCRYFALL_FETCH_TIMEOUT_MS, Math.max(250, remainingMs(deadline))));
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    console.error("Scryfall request timed out or failed", String(error?.message || error).slice(0, 160));
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function remainingMs(deadline) {
+  return Math.max(0, deadline - Date.now());
+}
+
+function timeExpired(deadline) {
+  return remainingMs(deadline) <= 0;
 }
 
 function delay(ms) {

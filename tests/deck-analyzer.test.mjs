@@ -1,7 +1,22 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { parseDeckRequest, parseDeckText, runBasicDiagnostics } from "../server/deck-analyzer/index.js";
+import { analyzeDeckRequest, findCatalogCards, parseDeckRequest, parseDeckText, runBasicDiagnostics } from "../server/deck-analyzer/index.js";
+
+const fileAssetEnv = {
+  ASSETS: {
+    async fetch(request) {
+      const url = new URL(request.url);
+      const fileUrl = new URL(`..${url.pathname}`, import.meta.url);
+      try {
+        return new Response(await readFile(fileUrl), { status: 200 });
+      } catch {
+        return new Response("", { status: 404 });
+      }
+    }
+  }
+};
 
 test("parse simple Arena deck with mainboard and sideboard", () => {
   const result = parseDeckText(`
@@ -149,4 +164,43 @@ test("parse request returns summary and diagnostics", () => {
   assert.equal(result.summary.sideboard_cards, 2);
   assert.equal(result.summary.total_unique_mainboard, 3);
   assert.deepEqual(result.errors, []);
+});
+
+test("catalog resolves Portuguese names from generated buckets", async () => {
+  const result = await findCatalogCards(["Kaalia, Buscadora do Zenite", "Anel Solar"], fileAssetEnv, "https://local.test/");
+
+  assert.equal(result.get("kaalia, buscadora do zenite").name, "Kaalia, Zenith Seeker");
+  assert.equal(result.get("anel solar").name, "Sol Ring");
+});
+
+test("commander analysis blocks missing selected commander", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    deckText: "99 Island"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.status, "error");
+  assert.ok(result.errors.some((error) => error.code === "COMMANDER_REQUIRED"));
+});
+
+test("commander analysis rejects color identity mismatch", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    commander: { name: "Tetsuko Umezawa, Fugitiva", colorIdentity: ["U"] },
+    deckText: "98 Island\n1 Swamp"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.status, "error");
+  assert.ok(result.errors.some((error) => error.code === "COMMANDER_COLOR_IDENTITY_MISMATCH"));
+});
+
+test("commander analysis warns when commander appears in decklist", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    commander: { name: "Yuriko, a Sombra do Tigre", colorIdentity: ["U", "B"] },
+    deckText: "1 Yuriko, a Sombra do Tigre\n98 Island"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.status, "partial");
+  assert.ok(result.warnings.some((warning) => warning.code === "COMMANDER_INCLUDED_IN_DECKLIST"));
 });

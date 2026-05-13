@@ -273,6 +273,33 @@
           <img class="open-grimoire-art" src="assets/brand/open-grimoire-pages.png" alt="" aria-hidden="true" draggable="false" />
 
           <form class="deck-page deck-page-input" id="deckForm" data-deck-member-tool>
+            <div class="deck-config">
+              <label>
+                <span>Formato</span>
+                <select id="deckFormat" aria-label="Formato do deck">
+                  <option value="commander" selected>Commander</option>
+                  <option value="brawl">Brawl</option>
+                  <option value="historic_brawl">Historic Brawl</option>
+                  <option value="standard">Standard</option>
+                  <option value="pioneer">Pioneer</option>
+                  <option value="modern">Modern</option>
+                  <option value="historic">Historic</option>
+                  <option value="timeless">Timeless</option>
+                  <option value="explorer">Explorer</option>
+                  <option value="pauper">Pauper</option>
+                  <option value="casual">Casual</option>
+                </select>
+              </label>
+
+              <div class="commander-picker" id="commanderPicker">
+                <label>
+                  <span>Comandante</span>
+                  <input id="deckCommander" type="search" placeholder="Digite e selecione o comandante" autocomplete="off" aria-controls="commanderSuggestions" aria-expanded="false" />
+                </label>
+                <div class="card-suggestions commander-suggestions" id="commanderSuggestions" role="listbox" aria-label="Sugestões de comandante"></div>
+                <div class="selected-commander" id="selectedCommander" hidden></div>
+              </div>
+            </div>
             <label>
               <span>Decklist</span>
               <textarea id="deckInput" rows="18" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;1 Command Tower"></textarea>

@@ -1,3 +1,6 @@
+import { BASIC_LANDS_PT, PT_CARD_ALIASES } from "../../server/deck-analyzer/card-aliases.js";
+import { flattenDeckForAnalysis, parseDeckRequest, parseDeckText } from "../../server/deck-analyzer/index.js";
+
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
 const PASSWORD_ITERATIONS = 100000;
@@ -5,7 +8,6 @@ const SCRYFALL_HEADERS = {
   Accept: "application/json",
   "User-Agent": "GrimorioDoCorvo/1.0 (site-corvo.fsbiscaro.workers.dev)"
 };
-
 const ROLE_FEATURES = {
   admin: ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"],
   member: ["dashboard", "decks", "deck_ai"],
@@ -18,12 +20,13 @@ export async function onRequest(context) {
 
 export async function handleApiRequest(request, env) {
   const url = new URL(request.url);
-  const route = url.pathname.replace(/^\/api\/?/, "") || "health";
+  const route = normalizeApiRoute(url.pathname);
 
   if (request.method === "OPTIONS") return emptyResponse(204);
 
   try {
     if (request.method === "GET" && route === "health") return health(env);
+    if (request.method === "POST" && route === "deck-analyzer/parse") return await parseDeckAnalyzer(request);
     if (request.method === "POST" && route === "auth/login") return await login(request, env);
     if (request.method === "POST" && route === "auth/logout") return await logout(request, env);
     if (request.method === "GET" && route === "auth/me") return await me(request, env);
@@ -38,12 +41,16 @@ export async function handleApiRequest(request, env) {
   }
 }
 
+function normalizeApiRoute(pathname) {
+  return String(pathname || "").replace(/^\/api\/?/, "").replace(/\/+$/, "") || "health";
+}
+
 
 async function health(env) {
   const payload = {
     ok: true,
     name: "Grimorio do Corvo API",
-    version: "2026-05-13.2",
+    version: "2026-05-13.4",
     dbConfigured: Boolean(env.DB),
     adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
     schemaReady: false
@@ -195,7 +202,8 @@ async function analyzeDeck(request, env) {
 
   const body = await readJson(request);
   const decklist = String(body.decklist || "");
-  const entries = parseDecklist(decklist);
+  const parsedDeck = parseDeckText(decklist);
+  const entries = flattenDeckForAnalysis(parsedDeck);
   if (!entries.length) return json({ error: "Cole uma decklist valida." }, { status: 400 });
 
   let report;
@@ -211,6 +219,14 @@ async function analyzeDeck(request, env) {
   report.aiEnabled = Boolean(report.aiText);
   report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
   return json(report);
+}
+
+async function parseDeckAnalyzer(request) {
+  const body = await readJson(request);
+  const deckText = String(body.deck_text ?? body.deckText ?? body.decklist ?? "");
+  const format = String(body.format || "casual");
+  if (!deckText.trim()) return json({ error: "Informe deck_text." }, { status: 400 });
+  return json(parseDeckRequest(deckText, format));
 }
 
 async function getCurrentUser(request, env) {
@@ -272,23 +288,11 @@ function featuresForUser(user) {
   return ROLE_FEATURES.guest;
 }
 
-function parseDecklist(text) {
-  return text
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !line.startsWith("//") && !line.startsWith("#"))
-    .filter((line) => !["commander", "deck", "sideboard", "maybeboard"].includes(line.toLowerCase()))
-    .map((line) => {
-      const clean = line.replace(/\s+\(.+\)\s*\d*$/g, "").trim();
-      const match = clean.match(/^(\d+)\s*x?\s+(.+)$/i);
-      return { quantity: match ? Number(match[1]) : 1, name: (match ? match[2] : clean).trim() };
-    })
-    .filter((entry) => entry.name && entry.quantity > 0);
-}
-
 async function fetchCards(entries) {
   const uniqueEntries = mergeDeckEntries(entries);
+  for (const entry of uniqueEntries) {
+    entry.lookupName = PT_CARD_ALIASES.get(entry.key) || BASIC_LANDS_PT.get(entry.key) || entry.name;
+  }
   const uniqueNames = uniqueEntries.map((entry) => entry.name);
   const chunks = [];
   for (let i = 0; i < uniqueNames.length; i += 75) chunks.push(uniqueNames.slice(i, i + 75));
@@ -299,7 +303,7 @@ async function fetchCards(entries) {
     const response = await fetch("https://api.scryfall.com/cards/collection", {
       method: "POST",
       headers: { ...SCRYFALL_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ identifiers: chunk.map((name) => ({ name })) })
+      body: JSON.stringify({ identifiers: chunk.map((name) => ({ name: uniqueEntries.find((entry) => entry.name === name)?.lookupName || name })) })
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
@@ -360,7 +364,8 @@ function cardSearchNames(card) {
 function matchCardToEntry(card, unresolved) {
   const names = cardSearchNames(card);
   for (const [key, entry] of unresolved) {
-    if (names.includes(key) || names.some((name) => name.split(" // ").includes(entry.key))) return key;
+    const lookupKey = normalizeCardNameKey(entry.lookupName || "");
+    if (names.includes(key) || (lookupKey && names.includes(lookupKey)) || names.some((name) => name.split(" // ").includes(entry.key))) return key;
   }
   return "";
 }
@@ -368,26 +373,86 @@ function matchCardToEntry(card, unresolved) {
 async function resolveCardsByFuzzyName(entries) {
   if (!entries.length) return [];
   const matches = [];
-  let index = 0;
-  const workers = Array.from({ length: Math.min(6, entries.length) }, async () => {
-    while (index < entries.length) {
-      const entry = entries[index++];
-      const card = await fetchCardByFuzzyName(entry.name);
-      if (card) matches.push({ entry, card });
-    }
-  });
-  await Promise.all(workers);
+  const unresolved = new Map(entries.map((entry) => [entry.key, entry]));
+  const batchMatches = await resolveCardsByMultilingualSearch(entries);
+  for (const { entry, card } of batchMatches) {
+    matches.push({ entry, card });
+    unresolved.delete(entry.key);
+  }
+
+  for (const entry of unresolved.values()) {
+    const card = await fetchCardByFuzzyName(entry.name);
+    if (card) matches.push({ entry, card });
+    await delay(85);
+  }
   return matches;
 }
 
+async function resolveCardsByMultilingualSearch(entries) {
+  const matches = [];
+  const chunkSize = 10;
+  for (let i = 0; i < entries.length; i += chunkSize) {
+    const chunk = entries.slice(i, i + chunkSize);
+    const unresolved = new Map(chunk.map((entry) => [entry.key, entry]));
+    const query = `include:multilingual (${chunk.map((entry) => `"${escapeScryfallSearch(entry.name)}"`).join(" or ")})`;
+    const cards = await fetchScryfallSearch(query);
+    for (const card of cards) {
+      const key = matchCardToEntry(card, unresolved);
+      if (!key) continue;
+      matches.push({ entry: unresolved.get(key), card });
+      unresolved.delete(key);
+    }
+    await delay(120);
+  }
+  return matches;
+}
+
+async function fetchScryfallSearch(query) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=prints&include_multilingual=true`, {
+      headers: SCRYFALL_HEADERS
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return data.data || [];
+    }
+    if (response.status === 400 || response.status === 404) return [];
+    if (response.status === 429 || response.status >= 500) {
+      const retryAfter = Number(response.headers.get("Retry-After") || 0);
+      await delay(retryAfter ? retryAfter * 1000 : 500 + attempt * 700);
+      continue;
+    }
+    console.error("Scryfall multilingual search failed", response.status, await response.text().catch(() => ""));
+    return [];
+  }
+  return [];
+}
+
+function escapeScryfallSearch(value) {
+  return String(value || "").replace(/["\\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 async function fetchCardByFuzzyName(name) {
-  const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, {
-    headers: SCRYFALL_HEADERS
-  });
-  if (response.ok) return await response.json();
-  if (response.status === 400 || response.status === 404) return null;
-  const detail = await response.text().catch(() => "");
-  throw new Error(`Nao consegui consultar ${name} no Scryfall. Status ${response.status}. ${detail.slice(0, 120)}`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, {
+      headers: SCRYFALL_HEADERS
+    });
+    if (response.ok) return await response.json();
+    if (response.status === 400 || response.status === 404) return null;
+    if (response.status === 429 || response.status >= 500) {
+      const retryAfter = Number(response.headers.get("Retry-After") || 0);
+      await delay(retryAfter ? retryAfter * 1000 : 500 + attempt * 700);
+      continue;
+    }
+    console.error("Scryfall fuzzy lookup failed", name, response.status, await response.text().catch(() => ""));
+    return null;
+  }
+  console.error("Scryfall fuzzy lookup exhausted retries", name);
+  return null;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildNameOnlyDeckReport(entries, error) {
@@ -496,7 +561,7 @@ function inferCommander(entries, cards) {
 }
 
 function displayCardName(card) {
-  return card?.printed_name || card?.name || "";
+  return card?.submitted_name || card?.printed_name || card?.name || "";
 }
 
 function buildDeckIdentity({ cards, types, roles, commander, colors }) {
@@ -690,8 +755,10 @@ function summarizeRoles(cards) {
   const roles = { Ramp: 0, Compra: 0, Remocao: 0, Protecao: 0, Recursao: 0, Tutores: 0 };
   cards.forEach((card) => {
     const quantity = card.quantity || 1;
-    const text = `${card.oracle_text || ""} ${card.type_line || ""} ${card.name || ""}`.toLowerCase();
-    if (text.includes("add ") || text.includes("treasure") || text.includes("signet") || text.includes("sol ring") || text.includes("mox") || text.includes("lotus") || text.includes("mana crypt") || text.includes("mana vault") || text.includes("ritual")) roles.Ramp += quantity;
+    const type = card.type_line || "";
+    const text = `${card.oracle_text || ""} ${type} ${card.name || ""}`.toLowerCase();
+    const isLand = type.includes("Land");
+    if (!isLand && (text.includes("add ") || text.includes("treasure") || text.includes("signet") || text.includes("sol ring") || text.includes("mox") || text.includes("lotus") || text.includes("mana crypt") || text.includes("mana vault") || text.includes("ritual"))) roles.Ramp += quantity;
     if (text.includes("draw") || text.includes("investigate") || text.includes("surveil") || text.includes("impulse")) roles.Compra += quantity;
     if (text.includes("destroy") || text.includes("exile") || text.includes("counter target") || text.includes("deals") || text.includes("damage to")) roles.Remocao += quantity;
     if (text.includes("hexproof") || text.includes("indestructible") || text.includes("protection") || text.includes("phase out") || text.includes("can't be countered") || text.includes("opponents can't cast spells")) roles.Protecao += quantity;

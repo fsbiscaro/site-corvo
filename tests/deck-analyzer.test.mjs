@@ -18,6 +18,105 @@ const fileAssetEnv = {
   }
 };
 
+const LATHRIL_TEST_DECK = `
+10 Pantano
+18 Floresta
+1 Mascara de Avacyn
+1 Fera Interior
+1 Batedor Chifre-de-Cobre
+1 Elfo do Arvoredo
+1 Druida Devotado
+1 Elfo Porto-Longinquo
+1 Proeza do Belo
+1 Passo Elfico
+1 Magistrado Imaculado
+1 Perfeita Imperiosa
+1 Dourador de Folhas
+1 Mestre de Caca de Lys Alana
+1 Retorno Aterrorizante
+1 Garra Krosana
+1 Elfos de Fyndhorn
+1 Elfos das Sombras Profundas
+1 Pastoras Magi-Anuladoras
+1 Putrificar
+1 Manto de Seda Ruflante
+1 Chifres de Vorrac para Combate
+1 Elfo Vigia dos Pinheiros
+1 Drenar Mente
+1 Patrulheiros Betulineos
+1 Voz das Matas
+1 Tutor Diabolico
+1 Mortos de Llanowar
+1 Inconsciente Coletivo
+1 Sacerdote de Titania
+1 Elfos da Floresta
+1 Patrulheiro de Skyshroud
+1 Vitalizar
+1 Arqueodruida Elfo
+1 Elfos de Llanowar
+1 Torre de Comando
+1 Homicidio
+1 Amuleto Golgari
+1 Passagem do Ladino
+1 Autoridade de Alfa
+1 Mistico Elfico
+1 Leia os Ossos
+1 Elmo do Espreitador
+1 Templo da Enfermidade
+1 Sabio da Reivindicacao
+1 No Rastro de Garruk
+1 Clareira na Selva
+1 Paisagem Infinita
+1 Revelacao Xamanica
+1 Pacto Condenavel
+1 Dwynen, Daen de Folha D'Ouro
+1 Xama do Bando
+1 Druida do Capote
+1 Bestiario do Vivideiro
+1 Marwyn, a Nutriz
+1 Arqueiro da Ponta Envenenada
+1 Encantador de Feras
+1 Druida do Paraiso
+1 Baixas de Guerra
+1 Tribo de Llanowar
+1 Recuperacao das Gavinhas Bolorentas
+1 Mistica da Mata
+1 Escudo Espelhado
+1 Ritos da Vila
+1 Abominacao de Llanowar
+1 Abismo da Floresta
+1 Umbrosabia de Skemfar
+1 Harald, Rei de Skemfar
+1 Vingadora de Skemfar
+1 Coroa de Skemfar
+1 Peconha da Presa Ancestral
+1 Pacto da Serpente
+1 Ponte de Musgosombrio
+`;
+
+const K_RRIK_TEST_DECK = `
+79 Pantano
+1 Tutor Diabolico
+1 Leia os Ossos
+1 Pacto Condenavel
+1 Homicidio
+1 Ritos da Vila
+1 Drenar Mente
+1 Lagoa dos Mortos
+1 Lacaio Devotado
+1 Lapide Silenciosa
+1 Last Rites
+1 Lashwrithe
+1 Last Laugh
+1 Lash of Malice
+1 Last Caress
+1 Labareda Mental
+1 Manto de Seda Ruflante
+1 Escudo Espelhado
+1 Mascara de Avacyn
+1 Anel Solar
+`;
+
 test("parse simple Arena deck with mainboard and sideboard", () => {
   const result = parseDeckText(`
     Deck
@@ -203,4 +302,56 @@ test("commander analysis warns when commander appears in decklist", async () => 
 
   assert.equal(result.status, "partial");
   assert.ok(result.warnings.some((warning) => warning.code === "COMMANDER_INCLUDED_IN_DECKLIST"));
+});
+
+test("Lathril nao retorna plano em construcao e mostra resumo tribal de Elfos", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    commander: { name: "Lathril, Espada dos Elfos", colorIdentity: ["B", "G"] },
+    deckText: LATHRIL_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.ok(["complete", "partial"].includes(result.status));
+  assert.equal(result.statistics.recognizedCards, 99);
+  assert.equal(result.archetype.primary, "Golgari Elfos");
+  assert.notEqual(result.archetype.primary, "Plano em construção");
+  assert.equal(result.tribalSummary.primaryTribe, "Elf");
+  assert.ok(result.tribalSummary.totalCreatures > 0);
+  assert.ok(result.tribalSummary.tribalCreatures > 0);
+  assert.equal(result.commander.displayName, "Lathril, Blade of the Elves");
+  assert.ok(!JSON.stringify(result).includes("O plano principal ainda precisa de mais cartas reconhecidas"));
+});
+
+test("K'rrik nao retorna plano em construcao e nao duplica nome do comandante", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    commander: { name: "K'rrik, Filho de Yawgmoth", colorIdentity: ["B"] },
+    deckText: K_RRIK_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.ok(result.archetype.primary.includes("K'rrik") || result.archetype.primary.includes("Mono Black K'rrik"));
+  assert.notEqual(result.archetype.primary, "Plano em construção");
+  assert.deepEqual(result.commander.colorIdentity, ["B"]);
+  assert.equal(result.commander.displayName, "K'rrik, Son of Yawgmoth");
+  assert.ok(!result.commander.displayName.includes("//"));
+});
+
+test("deck com muitas cartas desconhecidas reduz maxScore", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: "20 Carta Misteriosa\n20 Outra Carta Fantasma\n20 Island"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.ok(result.diagnostics.some((item) => item.code === "MANY_UNKNOWN_CARDS"));
+  assert.equal(result.score.maxScore, 6.5);
+});
+
+test("deck tribal sem commander profile ainda infere tribo principal", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: "20 Mountain\n20 Lathliss, Dragon Queen\n20 Lathliss, Dragon Queen"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.tribalSummary.primaryTribe, "Dragon");
+  assert.ok(result.tribalSummary.tribalCreatures > 0);
 });

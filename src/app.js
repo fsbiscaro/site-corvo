@@ -334,6 +334,8 @@ function renderDeckApiReport(report) {
   const summary = report.summary || {};
   const verdict = report.verdict || {};
   const identity = report.identity || {};
+  const renderData = report.renderData || {};
+  const score = report.score || {};
   return `
     ${renderDeckMessages(report.errors || [], "error")}
     ${renderDeckMessages(report.warnings || [], "warning")}
@@ -353,16 +355,16 @@ function renderDeckApiReport(report) {
       <p>${escapeHtml(identity.headline)}</p>
       ${Array.isArray(identity.tags) ? `<div class="deck-tags">${identity.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
     ` : ""}
+    ${renderScoreOverview(score)}
     ${renderDeckScores(report.scores || [])}
     ${report.aiText ? `<h3>Leitura com IA</h3><div class="ai-reading">${renderAiText(report.aiText)}</div>` : ""}
-    <h3>Resumo</h3>
-    <dl class="deck-stats">
-      <dt>Total</dt><dd>${summary.total ?? 0} cartas na lista, ${summary.foundTotal ?? 0} reconhecidas no catálogo local</dd>
-      <dt>Cores</dt><dd>${escapeHtml(summary.colors || "Incolor / nao identificado")}</dd>
-      <dt>Valor medio de mana</dt><dd>${escapeHtml(summary.averageManaValue ?? "-")}</dd>
-      <dt>Tipos</dt><dd>${formatObject(report.types || {})}</dd>
-      <dt>Funcoes</dt><dd>${formatObject(report.roles || {})}</dd>
-    </dl>
+    ${renderMetricSection("Resumo geral", renderData.summary, summary.total ? `${summary.total} cartas na lista, ${summary.foundTotal ?? 0} reconhecidas no catálogo local.` : "")}
+    ${renderMetricSection("Estrutura", renderData.structure, formatObject(report.types || {}))}
+    ${renderMetricSection("Mana", renderData.mana, formatObject(report.roles || {}))}
+    ${renderMetricSection("Funções", renderData.functions)}
+    ${renderMetricSection("Resumo tribal", renderData.tribal)}
+    ${renderWincons(report.winconSummary)}
+    ${renderArchetypeEvidence(report.archetype)}
     ${renderDeckList("Pontos fortes", report.strengths)}
     ${renderDeckList("Alertas", report.risks)}
     <h3>Prioridades do Corvo</h3>
@@ -397,6 +399,59 @@ function renderDeckScores(scores) {
         </article>
       `).join("")}
     </div>
+  `;
+}
+
+function renderScoreOverview(score) {
+  if (!score || score.final === undefined || score.final === null) return "";
+  return `
+    <h3>Notas técnicas</h3>
+    <dl class="deck-stats">
+      <dt>Nota final</dt><dd>${escapeHtml(score.final)}/10</dd>
+      <dt>Estrutura</dt><dd>${escapeHtml(score.structure ?? "-")}/10</dd>
+      <dt>Estratégia</dt><dd>${escapeHtml(score.strategy ?? "-")}/10</dd>
+      <dt>Consistência</dt><dd>${escapeHtml(score.consistency ?? "-")}/10</dd>
+      <dt>Interação</dt><dd>${escapeHtml(score.interaction ?? "-")}/10</dd>
+      <dt>Mana</dt><dd>${escapeHtml(score.mana ?? "-")}/10</dd>
+      <dt>Sinergia com comandante</dt><dd>${escapeHtml(score.commanderSynergy ?? "-")}/10</dd>
+      <dt>Teto atual</dt><dd>${escapeHtml(score.maxScore ?? "-")}/10${Array.isArray(score.limitReasons) && score.limitReasons.length ? ` · ${escapeHtml(score.limitReasons.join(" · "))}` : ""}</dd>
+    </dl>
+  `;
+}
+
+function renderMetricSection(title, items, fallbackText = "") {
+  if ((!Array.isArray(items) || !items.length) && !fallbackText) return "";
+  return `
+    <h3>${escapeHtml(title)}</h3>
+    <dl class="deck-stats">
+      ${Array.isArray(items) ? items.map((item) => `
+        <dt>${escapeHtml(item.label || "")}</dt><dd>${escapeHtml(item.value ?? "-")}</dd>
+      `).join("") : ""}
+      ${!items?.length && fallbackText ? `<dt>Resumo</dt><dd>${escapeHtml(fallbackText)}</dd>` : ""}
+    </dl>
+  `;
+}
+
+function renderWincons(winconSummary) {
+  const items = winconSummary?.primaryWincons || [];
+  if (!items.length) return "";
+  return `
+    <h3>Condições de vitória</h3>
+    <ul class="deck-advice">
+      ${items.map((item) => `<li>${escapeHtml(item.label)} (${escapeHtml(item.confidence)}) · ${escapeHtml((item.evidence || []).join(" · "))}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderArchetypeEvidence(archetype) {
+  if (!archetype) return "";
+  return `
+    <h3>Leitura do arquétipo</h3>
+    <ul class="deck-advice">
+      <li>${escapeHtml(`Principal: ${archetype.primary} · confiança ${archetype.confidence ?? "-"}`)}</li>
+      ${(archetype.evidence || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      ${(archetype.rejectedArchetypes || []).map((item) => `<li>${escapeHtml(`Descartado: ${item.name} — ${item.reason}`)}</li>`).join("")}
+    </ul>
   `;
 }
 

@@ -1,5 +1,5 @@
 import { BASIC_LANDS_PT, PT_CARD_ALIASES } from "../../server/deck-analyzer/card-aliases.js";
-import { analyzeDeckRequest, flattenDeckForAnalysis, parseDeckRequest, parseDeckText } from "../../server/deck-analyzer/index.js";
+import { analyzeDeckRequest, buildAiPrompt, flattenDeckForAnalysis, parseDeckRequest, parseDeckText } from "../../server/deck-analyzer/index.js";
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
@@ -830,24 +830,7 @@ async function generateAiDeckReading(env, report, entries) {
   if (!env.OPENAI_API_KEY) return "";
 
   const model = env.OPENAI_MODEL || "gpt-5";
-  const compactDeck = entries.slice(0, 120).map((entry) => `${entry.quantity} ${entry.name}`).join("\n");
-  const prompt = [
-    "Analise este deck de Magic: The Gathering para um apoiador do Grimorio do Corvo usando o Metodo Corvo.",
-    "Nao entregue uma resposta generica. Use os numeros do relatorio tecnico como fonte principal e explique o raciocinio.",
-    "Use portugues do Brasil, tom direto, util e levemente tematico, sem exagerar.",
-    "Entregue uma leitura extensa, organizada e acionavel com estes blocos:",
-    "1. Diagnostico do plano do deck.",
-    "2. O que o deck provavelmente quer fazer na mesa.",
-    "3. Gargalos por prioridade, do mais urgente ao menos urgente.",
-    "4. Cortes provaveis por categoria, sem inventar cartas especificas quando nao houver dado suficiente.",
-    "5. Upgrade por faixa: barato, medio e sonho, mas sem inventar precos.",
-    "6. Plano de teste para as proximas 3 partidas.",
-    "Nao invente precos. Se faltar contexto do comandante, diga como isso afeta a leitura.",
-    "Resumo tecnico:",
-    JSON.stringify(report, null, 2),
-    "Decklist:",
-    compactDeck
-  ].join("\n\n");
+  const prompt = buildAiPrompt(report, entries);
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -859,7 +842,7 @@ async function generateAiDeckReading(env, report, entries) {
       body: JSON.stringify({
         model,
         reasoning: { effort: "low" },
-        instructions: "Voce e o analisador de decks do Grimorio do Corvo. Seja util, claro e honesto sobre incertezas.",
+        instructions: "Voce e o analisador de decks do Grimorio do Corvo. Respeite estritamente o JSON tecnico e os limites de score.",
         input: prompt
       })
     });

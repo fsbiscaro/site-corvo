@@ -3,10 +3,19 @@ import { parseDeckText } from "./parser.js";
 import { buildDeckSummary } from "./statistics.js";
 
 export { flattenDeckForAnalysis, parseDeckText } from "./parser.js";
-export { buildDeckSummary } from "./statistics.js";
-export { runBasicDiagnostics } from "./diagnostics.js";
+export { buildDeckStatistics, buildDeckSummary } from "./statistics.js";
+export { buildDiagnostics, runBasicDiagnostics } from "./diagnostics.js";
 export { analyzeDeckRequest, generateDatabaseDraftForUnknownCards } from "./analysis.js";
-export { findCatalogCards, normalizeCardName, resolveCommanderCard } from "./catalog.js";
+export { detectArchetype } from "./archetype-detector.js";
+export { buildAiPrompt, buildAiTechnicalPayload } from "./ai-analysis.js";
+export { findCommanderProfile } from "./commander-profiles.js";
+export { findCatalogCards, formatCardDisplayName, normalizeCardName, resolveCommanderCard, extractSubtypesFromTypeLine } from "./catalog.js";
+export { expectedMainboardSize, expectedTotalSize, formatLabel, normalizeFormat, validateFormatRules } from "./format-rules.js";
+export { buildRendererData } from "./renderer-data.js";
+export { buildDeckScore, buildScoreCards } from "./score.js";
+export { buildTribalSummary } from "./tribal-analyzer.js";
+export { COMMANDER_FORMATS } from "./types.js";
+export { detectWincons } from "./wincon-detector.js";
 
 export function parseDeckRequest(deckText, format = "casual") {
   const parsed = parseDeckText(deckText);

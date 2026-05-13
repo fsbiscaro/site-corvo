@@ -1,6 +1,10 @@
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
 const PASSWORD_ITERATIONS = 100000;
+const SCRYFALL_HEADERS = {
+  Accept: "application/json",
+  "User-Agent": "GrimorioDoCorvo/1.0 (site-corvo.fsbiscaro.workers.dev)"
+};
 
 const ROLE_FEATURES = {
   admin: ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"],
@@ -39,7 +43,7 @@ async function health(env) {
   const payload = {
     ok: true,
     name: "Grimorio do Corvo API",
-    version: "2026-05-13.1",
+    version: "2026-05-13.2",
     dbConfigured: Boolean(env.DB),
     adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
     schemaReady: false
@@ -284,20 +288,17 @@ function parseDecklist(text) {
 }
 
 async function fetchCards(entries) {
-  const uniqueNames = [...new Set(entries.map((entry) => entry.name))];
+  const uniqueEntries = mergeDeckEntries(entries);
+  const uniqueNames = uniqueEntries.map((entry) => entry.name);
   const chunks = [];
   for (let i = 0; i < uniqueNames.length; i += 75) chunks.push(uniqueNames.slice(i, i + 75));
 
-  const found = [];
-  const notFound = [];
+  const resolvedCards = new Map();
+  const unresolved = new Map(uniqueEntries.map((entry) => [entry.key, entry]));
   for (const chunk of chunks) {
     const response = await fetch("https://api.scryfall.com/cards/collection", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "User-Agent": "GrimorioDoCorvo/1.0 (site-corvo.fsbiscaro.workers.dev)"
-      },
+      headers: { ...SCRYFALL_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify({ identifiers: chunk.map((name) => ({ name })) })
     });
     if (!response.ok) {
@@ -305,12 +306,88 @@ async function fetchCards(entries) {
       throw new Error(`Nao consegui consultar o Scryfall agora. Status ${response.status}. ${detail.slice(0, 120)}`);
     }
     const data = await response.json();
-    found.push(...(data.data || []));
-    notFound.push(...(data.not_found || []).map((item) => item.name).filter(Boolean));
+    for (const card of data.data || []) {
+      const key = matchCardToEntry(card, unresolved);
+      if (!key) continue;
+      resolvedCards.set(key, card);
+      unresolved.delete(key);
+    }
   }
 
-  const counts = new Map(entries.map((entry) => [entry.name.toLowerCase(), entry.quantity]));
-  return { found: found.map((card) => ({ ...card, quantity: counts.get(card.name.toLowerCase()) || 1 })), notFound };
+  const fallbackMatches = await resolveCardsByFuzzyName([...unresolved.values()]);
+  for (const { entry, card } of fallbackMatches) {
+    resolvedCards.set(entry.key, card);
+    unresolved.delete(entry.key);
+  }
+
+  return {
+    found: uniqueEntries
+      .filter((entry) => resolvedCards.has(entry.key))
+      .map((entry) => ({ ...resolvedCards.get(entry.key), quantity: entry.quantity, submitted_name: entry.name })),
+    notFound: [...unresolved.values()].map((entry) => entry.name)
+  };
+}
+
+function mergeDeckEntries(entries) {
+  const byKey = new Map();
+  for (const entry of entries) {
+    const key = normalizeCardNameKey(entry.name);
+    const current = byKey.get(key);
+    if (current) current.quantity += entry.quantity;
+    else byKey.set(key, { ...entry, key });
+  }
+  return [...byKey.values()];
+}
+
+function normalizeCardNameKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cardSearchNames(card) {
+  const names = [card.name, card.printed_name];
+  for (const face of card.card_faces || []) {
+    names.push(face.name, face.printed_name);
+  }
+  return names.filter(Boolean).map(normalizeCardNameKey);
+}
+
+function matchCardToEntry(card, unresolved) {
+  const names = cardSearchNames(card);
+  for (const [key, entry] of unresolved) {
+    if (names.includes(key) || names.some((name) => name.split(" // ").includes(entry.key))) return key;
+  }
+  return "";
+}
+
+async function resolveCardsByFuzzyName(entries) {
+  if (!entries.length) return [];
+  const matches = [];
+  let index = 0;
+  const workers = Array.from({ length: Math.min(6, entries.length) }, async () => {
+    while (index < entries.length) {
+      const entry = entries[index++];
+      const card = await fetchCardByFuzzyName(entry.name);
+      if (card) matches.push({ entry, card });
+    }
+  });
+  await Promise.all(workers);
+  return matches;
+}
+
+async function fetchCardByFuzzyName(name) {
+  const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, {
+    headers: SCRYFALL_HEADERS
+  });
+  if (response.ok) return await response.json();
+  if (response.status === 400 || response.status === 404) return null;
+  const detail = await response.text().catch(() => "");
+  throw new Error(`Nao consegui consultar ${name} no Scryfall. Status ${response.status}. ${detail.slice(0, 120)}`);
 }
 
 function buildNameOnlyDeckReport(entries, error) {
@@ -365,6 +442,7 @@ function buildDeckReport(entries, cardResult) {
   const cards = cardResult.found;
   const total = entries.reduce((sum, entry) => sum + entry.quantity, 0);
   const foundTotal = cards.reduce((sum, card) => sum + card.quantity, 0);
+  if (!foundTotal) return buildNameOnlyDeckReport(entries, new Error("Nenhuma carta foi reconhecida pelo Scryfall."));
   const types = summarizeTypes(cards);
   const roles = summarizeRoles(cards);
   const curve = summarizeCurve(cards);
@@ -379,6 +457,7 @@ function buildDeckReport(entries, cardResult) {
   const commander = inferCommander(entries, cards);
   const scores = buildPillarScores({ total, foundTotal, types, roles, curve, averageManaValue, notFound: cardResult.notFound });
   const overallScore = Number((scores.reduce((sum, item) => sum + item.score, 0) / scores.length).toFixed(1));
+  const identity = buildDeckIdentity({ cards, types, roles, commander, colors });
 
   return {
     summary: { total, foundTotal, colors, averageManaValue, notFound: cardResult.notFound },
@@ -388,13 +467,13 @@ function buildDeckReport(entries, cardResult) {
     advice,
     commander,
     verdict: buildVerdict({ overallScore, commander, colors, averageManaValue, lands: types.Terrenos, roles, total }),
-    identity: buildDeckIdentity({ cards, types, roles, commander, colors }),
+    identity,
     scores,
     strengths: buildStrengths({ total, foundTotal, types, roles, curve, averageManaValue }),
     risks: buildRisks({ total, foundTotal, types, roles, curve, averageManaValue, notFound: cardResult.notFound }),
     upgradePlan: buildUpgradePlan({ types, roles, curve, averageManaValue, total }),
     playtest: buildPlaytestPlan({ types, roles, curve, averageManaValue, total }),
-    corvoNote: buildCorvoNote(advice, averageManaValue, types.Terrenos)
+    corvoNote: buildCorvoNote({ commander, total, foundTotal, averageManaValue, lands: types.Terrenos, roles, identity })
   };
 }
 
@@ -405,14 +484,19 @@ function inferCommander(entries, cards) {
     return type.includes("Legendary") && type.includes("Creature");
   });
   const card = legendaryCreature || cards.find((item) => item.name.toLowerCase() === firstEntry.toLowerCase()) || cards[0];
+  const name = displayCardName(card) || firstEntry || "Comandante nao identificado";
   return {
-    name: card?.name || firstEntry || "Comandante nao identificado",
+    name,
     colors: summarizeColors(card ? [card] : []),
     type: card?.type_line || "",
     note: card
-      ? `Leitura ancorada em ${card.name}. Se este nao for o comandante, coloque o comandante na primeira linha para refinar o diagnostico.`
+      ? `Leitura ancorada em ${name}. Se este nao for o comandante, coloque o comandante na primeira linha para refinar o diagnostico.`
       : "Nao consegui identificar o comandante com seguranca. Coloque o comandante na primeira linha para melhorar a leitura."
   };
+}
+
+function displayCardName(card) {
+  return card?.printed_name || card?.name || "";
 }
 
 function buildDeckIdentity({ cards, types, roles, commander, colors }) {
@@ -502,7 +586,7 @@ function buildVerdict({ overallScore, commander, colors, averageManaValue, lands
 function buildStrengths({ total, foundTotal, types, roles, curve, averageManaValue }) {
   const strengths = [];
   if (foundTotal > 0) strengths.push("A lista foi lida carta por carta e cruzada com dados reais do Scryfall, nao apenas interpretada como texto solto.");
-  if (averageManaValue <= 3.2) strengths.push("A curva media esta controlada, o que tende a melhorar os primeiros turnos.");
+  if (foundTotal > 0 && averageManaValue <= 3.2) strengths.push("A curva media esta controlada, o que tende a melhorar os primeiros turnos.");
   if (roles.Ramp >= 8) strengths.push("O pacote de ramp ja aparece em quantidade saudavel.");
   if (roles.Compra >= 8) strengths.push("Ha uma base de compra/valor capaz de manter o deck respirando no meio da partida.");
   if (roles.Remocao >= 7) strengths.push("A quantidade de respostas detectadas ja permite interagir com a mesa.");
@@ -536,7 +620,8 @@ function buildUpgradePlan({ types, roles, curve, averageManaValue, total }) {
   const tuning = [];
 
   if (total < 99) foundation.push("Feche a lista em 100 cartas antes de comprar upgrades caros; uma lista parcial engana qualquer avaliacao.");
-  if (types.Terrenos < 34) foundation.push("Suba a base para 35-38 terrenos ou compense com ramp real e fontes que entram desviradas.");
+  if (types.Terrenos < 34 && roles.Ramp >= 10) foundation.push("A base tem poucos terrenos, mas o ramp/fast mana ajuda. Teste mulligans e corrija apenas se as cores travarem.");
+  else if (types.Terrenos < 34) foundation.push("Suba a base para 35-38 terrenos ou compense com ramp real e fontes que entram desviradas.");
   if (roles.Ramp < 8) foundation.push("Priorize ramp barato nos custos 1 e 2 para estabilizar os primeiros turnos.");
   if (!foundation.length) foundation.push("A base minima parece ok; passe para ajustes de consistencia.");
 
@@ -602,15 +687,16 @@ function summarizeCurve(cards) {
 }
 
 function summarizeRoles(cards) {
-  const roles = { Ramp: 0, Compra: 0, Remocao: 0, Protecao: 0, Recursao: 0 };
+  const roles = { Ramp: 0, Compra: 0, Remocao: 0, Protecao: 0, Recursao: 0, Tutores: 0 };
   cards.forEach((card) => {
     const quantity = card.quantity || 1;
     const text = `${card.oracle_text || ""} ${card.type_line || ""} ${card.name || ""}`.toLowerCase();
-    if (text.includes("add ") || text.includes("treasure") || text.includes("signet") || text.includes("sol ring")) roles.Ramp += quantity;
-    if (text.includes("draw") || text.includes("investigate") || text.includes("surveil")) roles.Compra += quantity;
+    if (text.includes("add ") || text.includes("treasure") || text.includes("signet") || text.includes("sol ring") || text.includes("mox") || text.includes("lotus") || text.includes("mana crypt") || text.includes("mana vault") || text.includes("ritual")) roles.Ramp += quantity;
+    if (text.includes("draw") || text.includes("investigate") || text.includes("surveil") || text.includes("impulse")) roles.Compra += quantity;
     if (text.includes("destroy") || text.includes("exile") || text.includes("counter target") || text.includes("deals") || text.includes("damage to")) roles.Remocao += quantity;
-    if (text.includes("hexproof") || text.includes("indestructible") || text.includes("protection") || text.includes("phase out")) roles.Protecao += quantity;
+    if (text.includes("hexproof") || text.includes("indestructible") || text.includes("protection") || text.includes("phase out") || text.includes("can't be countered") || text.includes("opponents can't cast spells")) roles.Protecao += quantity;
     if (text.includes("return target") || text.includes("graveyard") || text.includes("reanimate")) roles.Recursao += quantity;
+    if (text.includes("search your library") || text.includes("tutor") || text.includes("wish")) roles.Tutores += quantity;
   });
   return roles;
 }
@@ -618,7 +704,8 @@ function summarizeRoles(cards) {
 function buildAdvice({ total, foundTotal, types, roles, curve, averageManaValue, notFound }) {
   const advice = [];
   if (total < 90) advice.push("A lista parece incompleta. Para Commander, mire 100 cartas contando o comandante.");
-  if (types.Terrenos < 34) advice.push("A base de mana parece curta. Teste subir para 35-38 terrenos ou compensar com ramp consistente.");
+  if (types.Terrenos < 34 && roles.Ramp >= 10) advice.push("A base tem poucos terrenos, mas o ramp/fast mana detectado pode justificar isso. Teste mulligans e consistencia de cores antes de aumentar terrenos.");
+  else if (types.Terrenos < 34) advice.push("A base de mana parece curta. Teste subir para 35-38 terrenos ou compensar com ramp consistente.");
   if (types.Terrenos > 40) advice.push("Ha muitos terrenos para a maioria dos decks. Se o deck nao exige isso, transforme alguns slots em compra, ramp ou interacao.");
   if (roles.Ramp < 8) advice.push("O pacote de ramp esta baixo. Um deck Commander costuma respirar melhor com 8-12 aceleradores.");
   if (roles.Compra < 8) advice.push("Falta compra/geracao de valor. Sem isso, o deck tende a ficar sem mao no meio da partida.");
@@ -631,11 +718,17 @@ function buildAdvice({ total, foundTotal, types, roles, curve, averageManaValue,
   return advice;
 }
 
-function buildCorvoNote(advice, averageManaValue, lands) {
-  const opening = "O grimorio leu sua lista e encontrou alguns caminhos.";
-  const tempo = averageManaValue > 3.6 ? "A curva pede um pouco mais de leveza." : "A curva parece administravel.";
-  const mana = lands < 34 ? "A mana merece cuidado antes de qualquer upgrade chamativo." : "A base de mana nao acendeu alerta vermelho imediato.";
-  return `${opening} ${tempo} ${mana} Comece pelas recomendacoes de consistencia antes de comprar cartas caras.`;
+function buildCorvoNote({ commander, total, foundTotal, averageManaValue, lands, roles, identity }) {
+  const subject = commander?.name ? `Li a lista de ${commander.name}` : "Li sua lista";
+  const coverage = foundTotal < total ? ` e reconheci ${foundTotal} de ${total} cartas` : ` e reconheci as ${foundTotal} cartas principais`;
+  const plan = identity?.tags?.length ? `O sinal mais forte agora e ${identity.tags.slice(0, 2).join(" + ")}.` : "O plano principal ainda pede confirmacao.";
+  const mana = lands < 34 && roles.Ramp >= 10
+    ? "A base e enxuta, mas o ramp/fast mana pode sustentar essa escolha."
+    : lands < 34
+      ? "A base de mana acendeu alerta e precisa ser testada antes de upgrades caros."
+      : "A mana nao acendeu alerta vermelho imediato.";
+  const tempo = averageManaValue > 3.6 ? "A curva pede atencao." : "A curva parece administravel.";
+  return `${subject}${coverage}. ${plan} ${tempo} ${mana}`;
 }
 
 

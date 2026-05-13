@@ -2295,6 +2295,132 @@ pre {
   background: linear-gradient(90deg, #6d361f, #b67324 48%, #5f814d);
 }
 
+.deck-verdict {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(116, 70, 23, 0.26);
+  border-radius: 14px;
+  background: rgba(247, 226, 154, 0.36);
+}
+
+.deck-verdict span,
+.deck-score-card em {
+  display: block;
+  color: rgba(44, 29, 15, 0.72);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.deck-verdict strong {
+  display: block;
+  margin-top: 3px;
+  color: #2c1d0f;
+  line-height: 1.25;
+}
+
+.deck-verdict b {
+  color: #704215;
+  font-family: "Palatino Linotype", Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.deck-verdict p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.deck-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 14px;
+}
+
+.deck-tags span {
+  padding: 5px 8px;
+  border: 1px solid rgba(116, 70, 23, 0.2);
+  border-radius: 999px;
+  color: #3b2614;
+  background: rgba(255, 245, 186, 0.34);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.deck-score-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.deck-score-card {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(116, 70, 23, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 245, 186, 0.28);
+}
+
+.deck-score-card strong,
+.deck-score-card span {
+  display: block;
+  color: #2c1d0f;
+  font-weight: 900;
+}
+
+.deck-score-card span {
+  margin: 3px 0;
+  color: #704215;
+}
+
+.deck-score-card.alerta {
+  background: rgba(188, 104, 37, 0.16);
+}
+
+.deck-score-card.forte {
+  background: rgba(106, 128, 73, 0.16);
+}
+
+.deck-upgrade-plan {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.deck-upgrade-plan section {
+  padding: 10px 12px;
+  border: 1px solid rgba(116, 70, 23, 0.18);
+  border-radius: 13px;
+  background: rgba(255, 245, 186, 0.26);
+}
+
+.deck-upgrade-plan strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #704215;
+}
+
+.deck-upgrade-plan ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.deck-upgrade-plan li {
+  color: #2c1d0f;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 
 
 

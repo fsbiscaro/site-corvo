@@ -327,23 +327,86 @@ async function analyzeDeckWithApi(decklist, fallbackNames = []) {
 }
 
 function renderDeckApiReport(report) {
+  const summary = report.summary || {};
+  const verdict = report.verdict || {};
+  const identity = report.identity || {};
   return `
     <blockquote class="corvo-note">${escapeHtml(report.corvoNote || "O grimorio terminou a leitura.")}</blockquote>
+    ${verdict.title ? `
+      <section class="deck-verdict">
+        <div>
+          <span>Diagnóstico Corvo</span>
+          <strong>${escapeHtml(verdict.title)}</strong>
+        </div>
+        <b>${escapeHtml(verdict.score ?? "-")}/10</b>
+        <p>${escapeHtml(verdict.subtitle || "")}</p>
+      </section>
+    ` : ""}
+    ${identity.headline ? `
+      <h3>Identidade do deck</h3>
+      <p>${escapeHtml(identity.headline)}</p>
+      ${Array.isArray(identity.tags) ? `<div class="deck-tags">${identity.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
+    ` : ""}
+    ${renderDeckScores(report.scores || [])}
     ${report.aiText ? `<h3>Leitura com IA</h3><div class="ai-reading">${renderAiText(report.aiText)}</div>` : ""}
     <h3>Resumo</h3>
     <dl class="deck-stats">
-      <dt>Total</dt><dd>${report.summary.total} cartas na lista, ${report.summary.foundTotal} encontradas no Scryfall</dd>
-      <dt>Cores</dt><dd>${escapeHtml(report.summary.colors || "Incolor / nao identificado")}</dd>
-      <dt>Valor medio de mana</dt><dd>${escapeHtml(report.summary.averageManaValue ?? "-")}</dd>
+      <dt>Total</dt><dd>${summary.total ?? 0} cartas na lista, ${summary.foundTotal ?? 0} encontradas no Scryfall</dd>
+      <dt>Cores</dt><dd>${escapeHtml(summary.colors || "Incolor / nao identificado")}</dd>
+      <dt>Valor medio de mana</dt><dd>${escapeHtml(summary.averageManaValue ?? "-")}</dd>
       <dt>Tipos</dt><dd>${formatObject(report.types || {})}</dd>
       <dt>Funcoes</dt><dd>${formatObject(report.roles || {})}</dd>
     </dl>
+    ${renderDeckList("Pontos fortes", report.strengths)}
+    ${renderDeckList("Alertas", report.risks)}
     <h3>Prioridades do Corvo</h3>
     <ul class="deck-advice">${(report.advice || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    ${renderUpgradePlan(report.upgradePlan || [])}
+    ${renderDeckList("Plano de teste", report.playtest)}
     <h3>Curva de mana</h3>
     <div class="deck-bars">${renderCurveBars(report.curve || {})}</div>
   `;
 }
+
+function renderDeckScores(scores) {
+  if (!scores.length) return "";
+  return `
+    <h3>Método Corvo</h3>
+    <div class="deck-score-grid">
+      ${scores.map((item) => `
+        <article class="deck-score-card ${escapeHtml(item.status || "")}">
+          <strong>${escapeHtml(item.label || "Pilar")}</strong>
+          <span>${escapeHtml(item.score ?? "-")}/10</span>
+          <em>${escapeHtml(item.note || "")}</em>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderDeckList(title, items) {
+  if (!Array.isArray(items) || !items.length) return "";
+  return `
+    <h3>${escapeHtml(title)}</h3>
+    <ul class="deck-advice">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+  `;
+}
+
+function renderUpgradePlan(plan) {
+  if (!Array.isArray(plan) || !plan.length) return "";
+  return `
+    <h3>Plano de evolução</h3>
+    <div class="deck-upgrade-plan">
+      ${plan.map((block) => `
+        <section>
+          <strong>${escapeHtml(block.title || "Etapa")}</strong>
+          <ul>${(block.items || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </section>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderAiText(text) {
   return escapeHtml(text)
     .split(/\n{2,}/)

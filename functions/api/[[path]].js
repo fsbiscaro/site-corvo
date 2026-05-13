@@ -39,7 +39,7 @@ async function health(env) {
   const payload = {
     ok: true,
     name: "Grimorio do Corvo API",
-    version: "2026-05-06.4",
+    version: "2026-05-13.1",
     dbConfigured: Boolean(env.DB),
     adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
     schemaReady: false
@@ -318,6 +318,10 @@ function buildNameOnlyDeckReport(entries, error) {
   const emptyTypes = { Terrenos: 0, Criaturas: 0, Artefatos: 0, Encantamentos: 0, Instantaneas: 0, Feiticos: 0, Planeswalkers: 0 };
   const emptyRoles = { Ramp: 0, Compra: 0, Remocao: 0, Protecao: 0, Recursao: 0 };
   const emptyCurve = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+  const scores = [
+    { label: "Estrutura", score: total >= 99 ? 8 : total >= 90 ? 6 : 3, status: total >= 99 ? "ok" : "alerta", note: `${total} carta(s) informadas.` },
+    { label: "Dados", score: 2, status: "alerta", note: "Consulta externa indisponivel nesta leitura." }
+  ];
 
   return {
     summary: {
@@ -336,6 +340,22 @@ function buildNameOnlyDeckReport(entries, error) {
         ? "A lista parece incompleta para Commander. Mire 100 cartas contando o comandante."
         : "A quantidade geral parece fechada. Quando a consulta voltar, o grimorio consegue avaliar curva, tipos e funcoes com mais precisao."
     ],
+    commander: { name: entries[0]?.name || "Comandante nao identificado", colors: "Nao identificado", type: "", note: "Coloque o comandante na primeira linha para refinar a leitura." },
+    verdict: {
+      title: "Leitura limitada: consulta de cartas indisponivel",
+      subtitle: `Recebi ${total} carta(s), mas nao consegui cruzar os dados tecnicos agora.`,
+      score: Number((scores.reduce((sum, item) => sum + item.score, 0) / scores.length).toFixed(1)),
+      tier: "leitura parcial"
+    },
+    identity: { headline: "Identidade ainda nao confirmada porque a consulta externa falhou.", colors: "Nao identificado", commander: entries[0]?.name || "", tags: ["leitura parcial"] },
+    scores,
+    strengths: ["A lista foi recebida e pode ser analisada assim que a consulta externa responder."],
+    risks: ["Sem dados carta a carta, nao da para medir curva, funcoes e base de mana com confianca."],
+    upgradePlan: [
+      { title: "1. Preparar a lista", items: ["Confira nomes em ingles ou use nomes oficiais para aumentar a taxa de leitura.", "Coloque o comandante na primeira linha."] },
+      { title: "2. Rodar novamente", items: ["Tente de novo em alguns instantes para liberar curva, funcoes e prioridades tecnicas."] }
+    ],
+    playtest: ["Confirme se a lista tem 100 cartas.", "Separe comandante, terrenos, ramp, compra e respostas em blocos antes da proxima leitura."],
     corvoNote: "O grimorio abriu a pagina, mas a consulta externa falhou. A leitura basica continua disponivel para voce nao ficar parado.",
     apiWarning: String(error?.message || error || "Erro desconhecido").slice(0, 180)
   };
@@ -356,6 +376,9 @@ function buildDeckReport(entries, cardResult) {
   }, 0);
   const averageManaValue = Number((manaValueTotal / nonLands).toFixed(2));
   const advice = buildAdvice({ total, foundTotal, types, roles, curve, averageManaValue, notFound: cardResult.notFound });
+  const commander = inferCommander(entries, cards);
+  const scores = buildPillarScores({ total, foundTotal, types, roles, curve, averageManaValue, notFound: cardResult.notFound });
+  const overallScore = Number((scores.reduce((sum, item) => sum + item.score, 0) / scores.length).toFixed(1));
 
   return {
     summary: { total, foundTotal, colors, averageManaValue, notFound: cardResult.notFound },
@@ -363,8 +386,187 @@ function buildDeckReport(entries, cardResult) {
     roles,
     curve,
     advice,
+    commander,
+    verdict: buildVerdict({ overallScore, commander, colors, averageManaValue, lands: types.Terrenos, roles, total }),
+    identity: buildDeckIdentity({ cards, types, roles, commander, colors }),
+    scores,
+    strengths: buildStrengths({ total, foundTotal, types, roles, curve, averageManaValue }),
+    risks: buildRisks({ total, foundTotal, types, roles, curve, averageManaValue, notFound: cardResult.notFound }),
+    upgradePlan: buildUpgradePlan({ types, roles, curve, averageManaValue, total }),
+    playtest: buildPlaytestPlan({ types, roles, curve, averageManaValue, total }),
     corvoNote: buildCorvoNote(advice, averageManaValue, types.Terrenos)
   };
+}
+
+function inferCommander(entries, cards) {
+  const firstEntry = entries[0]?.name || "";
+  const legendaryCreature = cards.find((card) => {
+    const type = card.type_line || "";
+    return type.includes("Legendary") && type.includes("Creature");
+  });
+  const card = legendaryCreature || cards.find((item) => item.name.toLowerCase() === firstEntry.toLowerCase()) || cards[0];
+  return {
+    name: card?.name || firstEntry || "Comandante nao identificado",
+    colors: summarizeColors(card ? [card] : []),
+    type: card?.type_line || "",
+    note: card
+      ? `Leitura ancorada em ${card.name}. Se este nao for o comandante, coloque o comandante na primeira linha para refinar o diagnostico.`
+      : "Nao consegui identificar o comandante com seguranca. Coloque o comandante na primeira linha para melhorar a leitura."
+  };
+}
+
+function buildDeckIdentity({ cards, types, roles, commander, colors }) {
+  const text = cards.map((card) => `${card.name || ""} ${card.oracle_text || ""} ${card.type_line || ""}`).join(" ").toLowerCase();
+  const tags = [];
+  if (text.includes("token") || text.includes("create ")) tags.push("tokens/mesa larga");
+  if (text.includes("sacrifice") || text.includes("graveyard")) tags.push("cemiterio/recursao");
+  if (text.includes("counter target") || roles.Remocao >= 8) tags.push("controle/interacao");
+  if (text.includes("draw") || roles.Compra >= 8) tags.push("valor e compra");
+  if (types.Criaturas >= 28) tags.push("criaturas como plano principal");
+  if (types.Encantamentos >= 8) tags.push("encantamentos");
+  if (types.Artefatos >= 10) tags.push("artefatos/ramp");
+
+  return {
+    headline: tags.length
+      ? `O deck aponta para ${tags.slice(0, 3).join(", ")}.`
+      : "O plano principal ainda nao apareceu com forca suficiente na lista parcial.",
+    colors,
+    commander: commander.name,
+    tags: tags.length ? tags : ["estrutura inicial", "precisa de mais contexto"]
+  };
+}
+
+function buildPillarScores({ total, foundTotal, types, roles, curve, averageManaValue, notFound }) {
+  const lowDrops = (curve[1] || 0) + (curve[2] || 0);
+  const landScore = scoreLands(types.Terrenos);
+  const rampScore = scoreRange(roles.Ramp, 4, 8, 12);
+  const drawScore = scoreRange(roles.Compra, 4, 8, 12);
+  const removalScore = scoreRange(roles.Remocao, 4, 7, 11);
+  const protectionScore = scoreRange(roles.Protecao + roles.Recursao, 2, 5, 8);
+  const curveScore = Math.round((scoreAverageMana(averageManaValue) + scoreRange(lowDrops, 7, 12, 18)) / 2);
+  const completeScore = total >= 99 ? 10 : total >= 90 ? 8 : total >= 70 ? 5 : 2;
+  const lookupScore = foundTotal >= Math.min(total, 99) - Math.max(2, notFound.length) ? 10 : foundTotal >= total * 0.8 ? 7 : 4;
+
+  return [
+    { label: "Estrutura", score: Math.round((completeScore + lookupScore) / 2), note: total >= 99 ? "Lista praticamente fechada para Commander." : "A lista ainda parece parcial para Commander." },
+    { label: "Mana", score: Math.round((landScore + rampScore) / 2), note: `${types.Terrenos} terrenos e ${roles.Ramp} ramp detectados.` },
+    { label: "Curva", score: curveScore, note: `Valor medio ${averageManaValue}; ${lowDrops} jogadas entre custos 1 e 2.` },
+    { label: "Folego", score: drawScore, note: `${roles.Compra} fontes de compra/valor detectadas.` },
+    { label: "Interacao", score: removalScore, note: `${roles.Remocao} respostas/remocoes detectadas.` },
+    { label: "Protecao", score: protectionScore, note: `${roles.Protecao} protecoes e ${roles.Recursao} recursos de recursao detectados.` }
+  ].map((item) => ({ ...item, status: scoreStatus(item.score) }));
+}
+
+function scoreRange(value, low, good, great) {
+  if (value >= great) return 10;
+  if (value >= good) return 8;
+  if (value >= low) return 6;
+  if (value > 0) return 4;
+  return 2;
+}
+
+function scoreLands(lands) {
+  if (lands >= 35 && lands <= 38) return 10;
+  if (lands >= 33 && lands <= 40) return 8;
+  if (lands >= 30 && lands <= 42) return 6;
+  if (lands > 0) return 3;
+  return 1;
+}
+
+function scoreAverageMana(value) {
+  if (!Number.isFinite(value)) return 4;
+  if (value >= 2.2 && value <= 3.15) return 10;
+  if (value >= 1.9 && value <= 3.45) return 8;
+  if (value <= 3.8) return 6;
+  return 3;
+}
+
+function scoreStatus(score) {
+  if (score >= 8) return "forte";
+  if (score >= 6) return "ok";
+  return "alerta";
+}
+
+function buildVerdict({ overallScore, commander, colors, averageManaValue, lands, roles, total }) {
+  const tier = overallScore >= 8 ? "bem encaminhado" : overallScore >= 6 ? "jogavel, mas pede lapidacao" : "precisa de base antes de upgrades caros";
+  const title = `${commander.name}: ${tier}`;
+  const subtitle = [
+    `Nota Corvo ${overallScore}/10.`,
+    `Identidade ${colors}.`,
+    `Curva media ${averageManaValue}.`,
+    `${lands} terrenos, ${roles.Ramp} ramp, ${roles.Compra} compra e ${roles.Remocao} interacoes em ${total} cartas.`
+  ].join(" ");
+  return { title, subtitle, score: overallScore, tier };
+}
+
+function buildStrengths({ total, foundTotal, types, roles, curve, averageManaValue }) {
+  const strengths = [];
+  if (foundTotal > 0) strengths.push("A lista foi lida carta por carta e cruzada com dados reais do Scryfall, nao apenas interpretada como texto solto.");
+  if (averageManaValue <= 3.2) strengths.push("A curva media esta controlada, o que tende a melhorar os primeiros turnos.");
+  if (roles.Ramp >= 8) strengths.push("O pacote de ramp ja aparece em quantidade saudavel.");
+  if (roles.Compra >= 8) strengths.push("Ha uma base de compra/valor capaz de manter o deck respirando no meio da partida.");
+  if (roles.Remocao >= 7) strengths.push("A quantidade de respostas detectadas ja permite interagir com a mesa.");
+  if (types.Terrenos >= 35 && types.Terrenos <= 38) strengths.push("A base de terrenos esta dentro da faixa classica para Commander.");
+  if (total >= 99) strengths.push("A lista esta no tamanho esperado para Commander, entao os ajustes ja podem ser mais finos.");
+  if (!strengths.length) strengths.push("O ponto forte principal ainda nao esta nitido; a proxima versao deve reforcar uma identidade clara de vitoria.");
+  return strengths;
+}
+
+function buildRisks({ total, foundTotal, types, roles, curve, averageManaValue, notFound }) {
+  const risks = [];
+  const lowDrops = (curve[1] || 0) + (curve[2] || 0);
+  if (total < 99) risks.push("A lista esta incompleta para Commander; isso distorce curva, proporcao de terrenos e quantidade de respostas.");
+  if (foundTotal < total) risks.push(`${total - foundTotal} carta(s) nao entraram na leitura tecnica. Nomes em portugues, abreviacoes ou erros de escrita podem afetar o resultado.`);
+  if (types.Terrenos < 34) risks.push("A mana esta abaixo do piso recomendado. Antes de upgrades chamativos, corrija terrenos e fontes de cor.");
+  if (roles.Ramp < 8) risks.push("Pouco ramp: o deck pode assistir a mesa acelerar enquanto fica preso no desenvolvimento.");
+  if (roles.Compra < 8) risks.push("Pouca compra/valor: existe risco de ficar sem mao depois das primeiras trocas.");
+  if (roles.Remocao < 7) risks.push("Interacao baixa: o deck pode perder para permanentes problematicas sem conseguir responder.");
+  if (roles.Protecao + roles.Recursao < 4) risks.push("Baixa resiliencia: se a peca central cair, o plano pode demorar a voltar.");
+  if (averageManaValue > 3.6) risks.push("Curva pesada: sem ramp alto, a lista pode comecar a jogar tarde.");
+  if (lowDrops < 12) risks.push("Poucas jogadas baratas: os turnos 1 e 2 podem ficar passivos demais.");
+  if (notFound.length) risks.push(`Revise estes nomes primeiro: ${notFound.slice(0, 6).join(", ")}.`);
+  return risks;
+}
+
+function buildUpgradePlan({ types, roles, curve, averageManaValue, total }) {
+  const plan = [];
+  const foundation = [];
+  const consistency = [];
+  const power = [];
+  const tuning = [];
+
+  if (total < 99) foundation.push("Feche a lista em 100 cartas antes de comprar upgrades caros; uma lista parcial engana qualquer avaliacao.");
+  if (types.Terrenos < 34) foundation.push("Suba a base para 35-38 terrenos ou compense com ramp real e fontes que entram desviradas.");
+  if (roles.Ramp < 8) foundation.push("Priorize ramp barato nos custos 1 e 2 para estabilizar os primeiros turnos.");
+  if (!foundation.length) foundation.push("A base minima parece ok; passe para ajustes de consistencia.");
+
+  if (roles.Compra < 8) consistency.push("Inclua fontes recorrentes de compra/valor, nao apenas magicas pontuais.");
+  if (roles.Remocao < 7) consistency.push("Adicione respostas flexiveis que resolvam criaturas, encantamentos/artefatos ou permanentes problemáticas.");
+  if ((curve[1] || 0) + (curve[2] || 0) < 12) consistency.push("Troque algumas cartas caras por jogadas de custo 1 e 2 para o deck aparecer mais cedo na mesa.");
+  if (!consistency.length) consistency.push("A consistencia basica esta aceitavel; os proximos ajustes podem mirar sinergia e fechamento de jogo.");
+
+  if (roles.Protecao < 3) power.push("Adicione protecao para comandante ou peca-chave antes de investir em cartas de teto alto.");
+  if (averageManaValue > 3.6) power.push("Corte efeitos caros redundantes e mantenha apenas os que vencem jogo ou viram completamente a mesa.");
+  power.push("Depois da base e consistencia, escolha upgrades que reforcem exatamente o plano do comandante, nao cartas boas genericas.");
+
+  tuning.push("Teste 3 partidas anotando: mana travou, faltou carta na mao, faltou remocao ou faltou condicao de vitoria.");
+  tuning.push("A cada teste, troque no maximo 5 cartas. Isso evita baguncar o deck e deixa claro o que melhorou.");
+
+  plan.push({ title: "1. Base antes de brilho", items: foundation });
+  plan.push({ title: "2. Consistencia", items: consistency });
+  plan.push({ title: "3. Protecao e teto de poder", items: power });
+  plan.push({ title: "4. Teste guiado", items: tuning });
+  return plan;
+}
+
+function buildPlaytestPlan({ types, roles, curve, averageManaValue, total }) {
+  return [
+    total < 99 ? "Complete 100 cartas e rode a leitura de novo." : "Jogue uma partida sem trocar cartas e anote onde o deck engasgou.",
+    types.Terrenos < 34 ? "Conte quantas maos iniciais tiveram 2-3 terrenos. Se isso falhar muito, ajuste mana primeiro." : "Observe se as cores certas aparecem ate o turno 3.",
+    roles.Compra < 8 ? "Marque em qual turno sua mao fica vazia; se for antes do turno 6, falta motor de valor." : "Veja se as compras aparecem quando voce ja gastou a mao inicial.",
+    roles.Remocao < 7 ? "Anote permanentes que voce nao conseguiu responder." : "Teste se suas respostas resolvem diferentes tipos de ameaca.",
+    averageManaValue > 3.6 ? "Separe as cartas de custo 5+ e pergunte: isso vence ou recupera jogo? Se nao, vira corte." : "Confira se as cartas baratas realmente avancam seu plano."
+  ];
 }
 
 function summarizeColors(cards) {
@@ -443,9 +645,16 @@ async function generateAiDeckReading(env, report, entries) {
   const model = env.OPENAI_MODEL || "gpt-5";
   const compactDeck = entries.slice(0, 120).map((entry) => `${entry.quantity} ${entry.name}`).join("\n");
   const prompt = [
-    "Analise este deck de Magic: The Gathering para um apoiador do Grimorio do Corvo.",
-    "Use portugues do Brasil, tom direto e levemente tematico, sem exagerar.",
-    "Entregue 4 blocos curtos: Diagnostico, O que melhorar primeiro, Cortes/ajustes possiveis, Upgrade por prioridade.",
+    "Analise este deck de Magic: The Gathering para um apoiador do Grimorio do Corvo usando o Metodo Corvo.",
+    "Nao entregue uma resposta generica. Use os numeros do relatorio tecnico como fonte principal e explique o raciocinio.",
+    "Use portugues do Brasil, tom direto, util e levemente tematico, sem exagerar.",
+    "Entregue uma leitura extensa, organizada e acionavel com estes blocos:",
+    "1. Diagnostico do plano do deck.",
+    "2. O que o deck provavelmente quer fazer na mesa.",
+    "3. Gargalos por prioridade, do mais urgente ao menos urgente.",
+    "4. Cortes provaveis por categoria, sem inventar cartas especificas quando nao houver dado suficiente.",
+    "5. Upgrade por faixa: barato, medio e sonho, mas sem inventar precos.",
+    "6. Plano de teste para as proximas 3 partidas.",
     "Nao invente precos. Se faltar contexto do comandante, diga como isso afeta a leitura.",
     "Resumo tecnico:",
     JSON.stringify(report, null, 2),

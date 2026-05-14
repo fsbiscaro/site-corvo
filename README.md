@@ -49,6 +49,17 @@ Configure as variaveis no Cloudflare Pages:
 
 Se a chave nao existir, a analise continua funcionando com heuristicas de deck.
 
+O analisador trabalha em duas camadas:
+
+- Painel tecnico: parser, catalogo local, estatisticas, curva, mana, categorias, probabilidade e limites de nota.
+- Analise do Corvo: leitura humana em cima dos dados tecnicos. A IA interpreta o JSON tecnico, mas nao calcula numeros nem inventa carta.
+
+Modos de leitura:
+
+- `STANDARD_AI`: usa resumo tecnico, tags e texto apenas das cartas mais relevantes.
+- `DEEP_AI`: inclui mais textos de cartas e tenta buscar contexto externo no EDHREC para comparar com listas publicadas.
+- `local`: nao chama IA; usa apenas a leitura local deterministica.
+
 ## Banco
 
 O schema esta em `db/schema.sql`.

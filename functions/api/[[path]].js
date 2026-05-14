@@ -1,5 +1,5 @@
 import { BASIC_LANDS_PT, PT_CARD_ALIASES } from "../../server/deck-analyzer/card-aliases.js";
-import { analyzeDeckRequest, buildAiPrompt, flattenDeckForAnalysis, parseDeckRequest, parseDeckText } from "../../server/deck-analyzer/index.js";
+import { analyzeDeckRequest, attachExternalBenchmark, buildAiPrompt, fetchExternalCommanderBenchmark, normalizeAiMode, parseAiAnalysisText, parseDeckRequest, parseDeckText, renderAiAnalysisAsText } from "../../server/deck-analyzer/index.js";
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
@@ -11,6 +11,8 @@ const SCRYFALL_HEADERS = {
 const SCRYFALL_LOOKUP_BUDGET_MS = 12000;
 const SCRYFALL_FETCH_TIMEOUT_MS = 3500;
 const FUZZY_FALLBACK_LIMIT = 10;
+const AI_CACHE_TTL_SECONDS = 60 * 60 * 24 * 14;
+const AI_MEMORY_CACHE = new Map();
 const ROLE_FEATURES = {
   admin: ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"],
   member: ["dashboard", "decks", "deck_ai"],
@@ -212,10 +214,22 @@ async function analyzeDeck(request, env) {
     commander: body.commander || null
   }, { env, requestUrl: request.url });
 
-  const parsedDeck = parseDeckText(decklist);
-  const entries = flattenDeckForAnalysis(parsedDeck);
-  if (body.use_ai && report.status !== "error") report.aiText = await generateAiDeckReading(env, report, entries);
-  report.aiEnabled = Boolean(report.aiText);
+  const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
+  if (body.use_ai && report.status !== "error") {
+    const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
+    if (externalBenchmark) attachExternalBenchmark(report, externalBenchmark);
+    const aiResult = await generateAiDeckReading(env, report, { mode: aiMode, decklist, format, commander: body.commander || null });
+    if (aiResult.analysis) {
+      report.aiAnalysis = aiResult.analysis;
+      report.aiText = aiResult.text;
+      report.aiMode = aiMode;
+      report.aiCached = Boolean(aiResult.cached);
+    } else if (aiResult.error) {
+      report.aiError = aiResult.error;
+      if (report.status === "complete") report.status = "partial";
+    }
+  }
+  report.aiEnabled = Boolean(report.aiAnalysis || report.aiText);
   report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
   return json(report, { status: report.status === "error" ? 400 : 200 });
 }
@@ -826,11 +840,21 @@ function buildCorvoNote({ commander, total, foundTotal, averageManaValue, lands,
 }
 
 
-async function generateAiDeckReading(env, report, entries) {
-  if (!env.OPENAI_API_KEY) return "";
+async function generateAiDeckReading(env, report, options = {}) {
+  if (!env.OPENAI_API_KEY) {
+    return { analysis: null, text: "", error: "A IA do Corvo ainda nao esta configurada; mantive a leitura local." };
+  }
 
   const model = env.OPENAI_MODEL || "gpt-5";
-  const prompt = buildAiPrompt(report, entries);
+  const mode = normalizeAiMode(options.mode);
+  const maxScore = Number(report.scoreLimits?.maxScore ?? report.score?.maxScore ?? 10);
+  const cacheKey = await buildAiCacheKey({ decklist: options.decklist, commander: options.commander || report.commander, format: options.format || report.format, mode });
+  const cached = await readAiCache(cacheKey);
+  if (cached) return { ...cached, cached: true };
+
+  const prompt = buildAiPrompt(report, { mode });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), mode === "DEEP_AI" ? 45000 : 25000);
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -839,25 +863,76 @@ async function generateAiDeckReading(env, report, entries) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${env.OPENAI_API_KEY}`
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model,
-        reasoning: { effort: "low" },
-        instructions: "Voce e o analisador de decks do Grimorio do Corvo. Respeite estritamente o JSON tecnico e os limites de score.",
+        reasoning: { effort: mode === "DEEP_AI" ? "medium" : "low" },
+        instructions: "Você é o Corvo, analista de Commander do Grimório do Corvo. Use apenas o JSON técnico e respeite o teto de nota.",
         input: prompt
       })
     });
 
     if (!response.ok) {
       console.error("OpenAI error", response.status, await response.text());
-      return "";
+      return { analysis: null, text: "", error: "A analise com IA nao respondeu agora; mantive a leitura tecnica local." };
     }
 
     const data = await response.json();
-    return extractOpenAiText(data).trim();
+    const rawText = extractOpenAiText(data).trim();
+    const analysis = parseAiAnalysisText(rawText, maxScore);
+    const text = renderAiAnalysisAsText(analysis);
+    const result = { analysis, text };
+    await writeAiCache(cacheKey, result);
+    return result;
   } catch (error) {
     console.error("OpenAI unavailable", error);
-    return "";
+    return { analysis: null, text: "", error: "A analise com IA falhou sem travar o deck; a leitura local continua disponivel." };
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+async function buildAiCacheKey(payload) {
+  return sha256Hex(JSON.stringify({
+    v: "corvo-ai-review-v1",
+    decklist: payload.decklist || "",
+    commander: payload.commander?.canonicalName || payload.commander?.name || payload.commander?.displayName || "",
+    format: payload.format || "casual",
+    mode: payload.mode
+  }));
+}
+
+async function readAiCache(key) {
+  if (AI_MEMORY_CACHE.has(key)) return AI_MEMORY_CACHE.get(key);
+  if (typeof caches === "undefined") return null;
+  try {
+    const response = await caches.default.match(aiCacheRequest(key));
+    if (!response) return null;
+    const payload = await response.json();
+    AI_MEMORY_CACHE.set(key, payload);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function writeAiCache(key, payload) {
+  AI_MEMORY_CACHE.set(key, payload);
+  if (typeof caches === "undefined") return;
+  try {
+    await caches.default.put(aiCacheRequest(key), new Response(JSON.stringify(payload), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": `public, max-age=${AI_CACHE_TTL_SECONDS}`
+      }
+    }));
+  } catch {
+    // Cache is an optimization; ignore failures.
+  }
+}
+
+function aiCacheRequest(key) {
+  return new Request(`https://grimorio.local/ai-cache/${key}`);
 }
 
 function extractOpenAiText(data) {

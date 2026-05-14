@@ -296,9 +296,16 @@ function renderDeckLockedOutput() {
   `;
 }
 
-async function analyzeDeckWithApi({ decklist, format, commander, submitButton }) {
+async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "standard", submitButton }) {
   const output = document.querySelector("#deckOutput");
-  const loadingMessages = ["Lendo lista...", "Cruzando com database local...", "Calculando estatísticas...", "Gerando diagnóstico..."];
+  const useAi = aiMode !== "local";
+  const loadingMessages = [
+    "Lendo lista...",
+    "Cruzando com database local...",
+    "Calculando estatísticas...",
+    "Gerando diagnóstico...",
+    useAi ? "Gerando análise do Corvo..." : "Preparando leitura local..."
+  ];
   let loadingIndex = 0;
   output.innerHTML = `<p>${loadingMessages[loadingIndex]}</p>`;
   const loadingTimer = window.setInterval(() => {
@@ -311,7 +318,7 @@ async function analyzeDeckWithApi({ decklist, format, commander, submitButton })
     const response = await fetch(`${API_BASE}/decks/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ deck_text: decklist, format, commander, use_ai: false })
+      body: JSON.stringify({ deck_text: decklist, format, commander, use_ai: useAi, ai_mode: aiMode })
     });
     const report = await response.json();
     if (response.status === 401) {
@@ -331,15 +338,11 @@ async function analyzeDeckWithApi({ decklist, format, commander, submitButton })
 }
 
 function renderDeckApiReport(report) {
-  const summary = report.summary || {};
   const verdict = report.verdict || {};
-  const identity = report.identity || {};
-  const renderData = report.renderData || {};
-  const score = report.score || {};
   return `
     ${renderDeckMessages(report.errors || [], "error")}
     ${renderDeckMessages(report.warnings || [], "warning")}
-    <blockquote class="corvo-note">${escapeHtml(report.corvoNote || "O grimorio terminou a leitura.")}</blockquote>
+    ${report.aiError ? `<div class="deck-message is-warning"><p>${escapeHtml(report.aiError)}</p></div>` : ""}
     ${verdict.title ? `
       <section class="deck-verdict">
         <div>
@@ -350,30 +353,164 @@ function renderDeckApiReport(report) {
         <p>${escapeHtml(verdict.subtitle || "")}</p>
       </section>
     ` : ""}
-    ${identity.headline ? `
-      <h3>Identidade do deck</h3>
-      <p>${escapeHtml(identity.headline)}</p>
-      ${Array.isArray(identity.tags) ? `<div class="deck-tags">${identity.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
-    ` : ""}
-    ${renderScoreOverview(score)}
-    ${renderDeckScores(report.scores || [])}
-    ${report.aiText ? `<h3>Leitura com IA</h3><div class="ai-reading">${renderAiText(report.aiText)}</div>` : ""}
-    ${renderMetricSection("Resumo geral", renderData.summary, summary.total ? `${summary.total} cartas na lista, ${summary.foundTotal ?? 0} reconhecidas no catálogo local.` : "")}
-    ${renderMetricSection("Estrutura", renderData.structure, formatObject(report.types || {}))}
-    ${renderMetricSection("Mana", renderData.mana, formatObject(report.roles || {}))}
-    ${renderMetricSection("Funções", renderData.functions)}
-    ${renderMetricSection("Resumo tribal", renderData.tribal)}
-    ${renderWincons(report.winconSummary)}
-    ${renderArchetypeEvidence(report.archetype)}
-    ${renderDeckList("Pontos fortes", report.strengths)}
-    ${renderDeckList("Alertas", report.risks)}
-    <h3>Prioridades do Corvo</h3>
-    <ul class="deck-advice">${(report.advice || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
-    ${renderUpgradePlan(report.upgradePlan || [])}
-    ${renderDeckList("Plano de teste", report.playtest)}
-    <h3>Curva de mana</h3>
-    <div class="deck-bars">${renderCurveBars(report.curve || {})}</div>
+    ${renderTechnicalPanel(report)}
+    ${renderCorvoReview(report.aiAnalysis || report.corvoReview, Boolean(report.aiAnalysis), report)}
   `;
+}
+
+function renderTechnicalPanel(report) {
+  const renderData = report.renderData || {};
+  return `
+    <section class="deck-section technical-panel">
+      <h3>Painel técnico</h3>
+      ${renderMetricSection("Resumo geral", renderData.summary)}
+      ${renderCurvePanel(report)}
+      ${renderMetricSection("Estrutura", renderData.structure)}
+      ${renderMetricSection("Categorias funcionais", renderData.categories)}
+      ${renderMetricSection("Produção de mana", renderData.manaProduction)}
+      ${renderMetricSection("Demanda de mana", renderData.manaDemand)}
+      ${renderMetricSection("Probabilidade", renderData.probability)}
+      ${renderPackagePanel(renderData.packages || [])}
+      ${renderDeckScores(report.scores || [])}
+    </section>
+  `;
+}
+
+function renderCurvePanel(report) {
+  return `
+    <h3>Curva de mana</h3>
+    <div class="deck-bars">${renderCurveBars(report.curve || report.manaCurve || {})}</div>
+    ${renderCurveMiniGrid(report.statistics?.manaCurveByColor || {}, "Curva por cor")}
+    ${renderCurveMiniGrid(report.statistics?.manaCurveByType || {}, "Curva por tipo")}
+  `;
+}
+
+function renderCurveMiniGrid(curves, title) {
+  const entries = Object.entries(curves || {}).filter(([, curve]) => Object.values(curve || {}).some((value) => Number(value) > 0));
+  if (!entries.length) return "";
+  return `
+    <h3>${escapeHtml(title)}</h3>
+    <div class="curve-mini-grid">
+      ${entries.slice(0, 8).map(([label, curve]) => `
+        <article>
+          <strong>${escapeHtml(formatCurveLabel(label))}</strong>
+          <div class="mini-bars">${Object.entries(curve).map(([bucket, value]) => `<span style="height:${Math.max(8, Number(value || 0) * 6)}px" title="${escapeHtml(bucket)}: ${escapeHtml(value)}"></span>`).join("")}</div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderPackagePanel(packages) {
+  if (!packages.length) return "";
+  return `
+    <h3>Pacotes do deck</h3>
+    <div class="package-grid">
+      ${packages.map((item) => `
+        <article class="package-card ${escapeHtml(item.status || "")}">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.value)}</span>
+          <p>${escapeHtml(item.interpretation || "")}</p>
+          <em>${escapeHtml(item.action || "")}</em>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderCorvoReview(review, isAi, report) {
+  if (!review) {
+    return `
+      <section class="deck-section corvo-review">
+        <h3>Análise do Corvo</h3>
+        <p>A leitura humana aparece aqui quando o painel técnico terminar.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="deck-section corvo-review">
+      <h3>${isAi ? "Análise do Corvo" : "Análise local do Corvo"}</h3>
+      ${isAi ? `<p class="deck-fallback-note">IA ${escapeHtml(report.aiMode || "STANDARD_AI")}${report.aiCached ? " · resposta em cache" : ""}</p>` : ""}
+      <blockquote class="corvo-note">${escapeHtml(review.summary || report.corvoNote || "O grimório terminou a leitura.")}</blockquote>
+      ${renderReviewParagraph("O que o comandante quer", review.commanderUnderstanding)}
+      ${renderReviewParagraph("Plano A", review.planA)}
+      ${renderReviewParagraph("Plano B", review.planB)}
+      ${renderReviewParagraph("Como ganha", review.howItWins)}
+      ${renderReviewParagraph("Base de mana", review.manaBase || review.manaBaseReview)}
+      ${renderReviewParagraph("Curva", review.curve || review.curveReview)}
+      ${renderReviewParagraph("Ramp", review.ramp || review.rampReview)}
+      ${renderReviewParagraph("Compra", review.draw || review.cardAdvantageReview)}
+      ${renderReviewParagraph("Interação", review.interaction || review.interactionReview)}
+      ${renderReviewParagraph("Proteção", review.protection || review.protectionReview)}
+      ${renderReviewParagraph("Dependência do comandante", review.commanderDependency)}
+      ${renderReviewCardList("Cartas-chave", review.keyCards)}
+      ${renderReviewCardList("Motores", review.engines)}
+      ${renderReviewCardList("Payoffs", review.payoffs)}
+      ${renderReviewCardList("Cartas núcleo", review.coreCards)}
+      ${renderReviewCardList("Slots flexíveis", review.flexCards)}
+      ${renderReviewCardList("Cartas suspeitas", review.suspiciousCards)}
+      ${renderReviewCardList("Possíveis cortes", review.suggestedCuts || review.cutCandidates)}
+      ${renderReviewCardList("Sugestões de adição", review.suggestedAdds)}
+      ${renderDeckList("Pontos fortes", review.strengths)}
+      ${renderDeckList("Pontos fracos", review.weaknesses)}
+      ${renderDeckList("Prioridades de upgrade", review.upgradePriorities)}
+      ${renderMulligan(review.mulligan || review.mulliganGuide)}
+      ${renderMatchups(review.matchups)}
+      ${renderDeckList("Plano de teste", review.testingPlan)}
+      ${renderReviewParagraph("Veredito", review.finalVerdict)}
+      ${review.score ? `<p class="deck-fallback-note">Nota explicada: ${escapeHtml(review.score.value ?? "-")}/10 · ${escapeHtml(review.score.explanation || "")}</p>` : ""}
+    </section>
+  `;
+}
+
+function renderReviewParagraph(title, value) {
+  if (!value || (Array.isArray(value) && !value.length)) return "";
+  const content = Array.isArray(value) ? value.map((item) => `<li>${escapeHtml(item)}</li>`).join("") : escapeHtml(value);
+  return Array.isArray(value)
+    ? `<h3>${escapeHtml(title)}</h3><ul class="deck-advice">${content}</ul>`
+    : `<h3>${escapeHtml(title)}</h3><p>${content}</p>`;
+}
+
+function renderReviewCardList(title, cards) {
+  if (!Array.isArray(cards) || !cards.length) return "";
+  return `
+    <h3>${escapeHtml(title)}</h3>
+    <div class="review-card-list">
+      ${cards.slice(0, 10).map((card) => `
+        <article>
+          <strong>${escapeHtml(card.name || card.title || card.card || card)}</strong>
+          ${card.reason || card.explanation ? `<span>${escapeHtml(card.reason || card.explanation)}</span>` : ""}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderMulligan(mulligan) {
+  if (!mulligan) return "";
+  return `
+    <h3>Guia de mulligan</h3>
+    <div class="mulligan-grid">
+      ${renderDeckList("Manter", mulligan.keep)}
+      ${renderDeckList("Mulligar", mulligan.mulligan)}
+    </div>
+  `;
+}
+
+function renderMatchups(matchups) {
+  if (!matchups) return "";
+  return `
+    <h3>Matchups</h3>
+    <div class="mulligan-grid">
+      ${renderDeckList("Vai melhor contra", matchups.goodAgainst)}
+      ${renderDeckList("Sofre contra", matchups.badAgainst)}
+    </div>
+  `;
+}
+
+function formatCurveLabel(label) {
+  return ({ W: "Branco", U: "Azul", B: "Preto", R: "Vermelho", G: "Verde", C: "Incolor" })[label] || label;
 }
 
 function renderDeckMessages(items, tone) {
@@ -459,8 +596,17 @@ function renderDeckList(title, items) {
   if (!Array.isArray(items) || !items.length) return "";
   return `
     <h3>${escapeHtml(title)}</h3>
-    <ul class="deck-advice">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    <ul class="deck-advice">${items.map((item) => `<li>${escapeHtml(formatListItem(item))}</li>`).join("")}</ul>
   `;
+}
+
+function formatListItem(item) {
+  if (!item || typeof item !== "object") return item;
+  if (item.name && item.reason) return `${item.name}: ${item.reason}`;
+  if (item.name && item.explanation) return `${item.name}: ${item.explanation}`;
+  if (item.title && item.items) return `${item.title}: ${[].concat(item.items).join("; ")}`;
+  if (item.label && item.value) return `${item.label}: ${item.value}`;
+  return item.name || item.title || item.label || JSON.stringify(item);
 }
 
 function renderUpgradePlan(plan) {
@@ -1709,6 +1855,7 @@ document.querySelector("#deckForm").addEventListener("submit", async (event) => 
     decklist: deckText,
     format: deckFormatInput.value,
     commander: buildCommanderPayload(),
+    aiMode: document.querySelector("#deckAiMode")?.value || "standard",
     submitButton: event.submitter || event.currentTarget.querySelector("button[type='submit']")
   });
 });

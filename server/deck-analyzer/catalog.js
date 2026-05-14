@@ -44,6 +44,7 @@ export async function resolveCommanderCard(commander, env, requestUrl) {
     subtypes: found?.subtypes || extractSubtypesFromTypeLine(commander.typeLine || commander.type_line || commander.type || ""),
     colors: normalizeColors(commander.colors || found?.colors || []),
     colorIdentity,
+    legalities: found?.legalities || commander.legalities || {},
     tags: normalizeTags([...(found?.tags || []), "commander"]),
     imageUrl: commander.imageUrl || commander.image_url || found?.imageUrl || null,
     thumbnailUrl: commander.thumbnailUrl || commander.thumbnail_url || found?.thumbnailUrl || null,
@@ -219,6 +220,7 @@ function enrichParsedCard(card, info) {
       subtypes: [],
       colors: [],
       colorIdentity: [],
+      legalities: {},
       tags: ["needs_review"],
       databaseStatus: "unknown"
     };
@@ -237,6 +239,7 @@ function enrichParsedCard(card, info) {
     subtypes: info.subtypes,
     colors: info.colors,
     colorIdentity: info.colorIdentity,
+    legalities: info.legalities,
     tags: info.tags,
     power: info.power,
     toughness: info.toughness,
@@ -285,6 +288,7 @@ function normalizeCatalogCard(card) {
     subtypes,
     colors: normalizeColors(card.colors || []),
     colorIdentity: normalizeColors(card.colorIdentity || []),
+    legalities: card.legalities || {},
     tags: normalizeTags([...(card.tags || []), ...inferredTags]),
     power: card.power ?? null,
     toughness: card.toughness ?? null,

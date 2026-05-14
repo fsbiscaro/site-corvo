@@ -1,10 +1,15 @@
 import { detectArchetype } from "./archetype-detector.js";
 import { findAiCandidateNames } from "./analysis-helpers.js";
+import { analyzeCardRoles } from "./card-role-analyzer.js";
 import { findCommanderProfile } from "./commander-profiles.js";
 import { enrichCardsWithCatalog, normalizeCardName, resolveCommanderCard } from "./catalog.js";
+import { buildCorvoReview } from "./corvo-review-engine.js";
 import { buildDiagnostics } from "./diagnostics.js";
 import { expectedTotalSize, formatLabel, normalizeFormat, validateFormatRules } from "./format-rules.js";
+import { buildManaAnalysis } from "./mana-analysis.js";
+import { buildPackageAnalysis } from "./package-analyzer.js";
 import { parseDeckText } from "./parser.js";
+import { buildProbabilityAnalysis } from "./probability-analysis.js";
 import { buildRendererData } from "./renderer-data.js";
 import { buildScoreCards, buildDeckScore } from "./score.js";
 import { buildDeckStatistics } from "./statistics.js";
@@ -28,8 +33,14 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   const diagnostics = buildDiagnostics({ format: normalizedFormat, commander: selectedCommander, commanderProfile, statistics, validation, tribalSummary, winconSummary, archetype });
   const score = buildDeckScore({ format: normalizedFormat, statistics, validation, archetype, commanderProfile, tribalSummary, winconSummary });
   const scoreLimits = { maxScore: score.maxScore, reasons: score.limitReasons };
+  const manaAnalysis = buildManaAnalysis({ cards: enrichedDeck, commander: selectedCommander, statistics });
+  const probabilityAnalysis = buildProbabilityAnalysis({ statistics });
+  const cardRoles = analyzeCardRoles({ cards: enrichedDeck, commander: selectedCommander, commanderProfile, tribalSummary, winconSummary, archetype });
+  const packages = buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnalysis, cardRoles, commanderProfile, tribalSummary, winconSummary });
+  const catalogQuality = buildCatalogQuality(statistics);
+  const corvoReview = buildCorvoReview({ commander: selectedCommander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, tribalSummary, score, diagnostics, externalBenchmark: null });
   const scores = buildScoreCards(score, statistics);
-  const renderData = buildRendererData({ commander: selectedCommander, statistics, tribalSummary, score, archetype, winconSummary });
+  const renderData = buildRendererData({ commander: selectedCommander, statistics, tribalSummary, score, archetype, winconSummary, manaAnalysis, probabilityAnalysis, packages, cardRoles });
 
   if (validation.blockingErrors.length) {
     return {
@@ -44,6 +55,12 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
       statistics,
       tribalSummary,
       winconSummary,
+      manaAnalysis,
+      probabilityAnalysis,
+      cardRoles,
+      packages,
+      catalogQuality,
+      corvoReview,
       diagnostics,
       score,
       scoreLimits,
@@ -76,6 +93,12 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     statistics,
     tribalSummary,
     winconSummary,
+    manaAnalysis,
+    probabilityAnalysis,
+    cardRoles,
+    packages,
+    catalogQuality,
+    corvoReview,
     diagnostics,
     warnings: [...parsed.warnings, ...validation.warnings],
     errors: parsed.errors,
@@ -96,7 +119,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     playtest: buildPlaytestPlan({ statistics, winconSummary }),
     corvoNote: buildCorvoNote({ commander: selectedCommander, commanderProfile, statistics, archetype, tribalSummary }),
     renderData,
-    technicalJson: buildTechnicalJson({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, winconSummary, diagnostics, archetype, score, format: normalizedFormat }),
+    technicalJson: buildTechnicalJson({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, winconSummary, diagnostics, archetype, score, scoreLimits, format: normalizedFormat, deck: enrichedDeck, manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark: null }),
     aiAnalysis: null,
     aiText: ""
   };
@@ -209,22 +232,103 @@ function buildCorvoNote({ commander, commanderProfile, statistics, archetype, tr
   return `${subject}${coverage}${plan}${tribalText}`;
 }
 
-function buildTechnicalJson({ commander, commanderProfile, statistics, tribalSummary, winconSummary, diagnostics, archetype, score, format }) {
+export function attachExternalBenchmark(report, externalBenchmark = null) {
+  if (!report || report.status === "error") return report;
+  report.externalBenchmark = externalBenchmark;
+  if (externalBenchmark) {
+    report.corvoReview = buildCorvoReview({
+      commander: report.commander,
+      statistics: report.statistics,
+      manaAnalysis: report.manaAnalysis,
+      probabilityAnalysis: report.probabilityAnalysis,
+      cardRoles: report.cardRoles,
+      packages: report.packages,
+      winconSummary: report.winconSummary,
+      archetype: report.archetype,
+      tribalSummary: report.tribalSummary,
+      score: report.score,
+      diagnostics: report.diagnostics,
+      externalBenchmark
+    });
+  }
+  report.technicalJson = buildTechnicalJson({
+    commander: report.commander,
+    commanderProfile: report.commanderProfile,
+    statistics: report.statistics,
+    tribalSummary: report.tribalSummary,
+    winconSummary: report.winconSummary,
+    diagnostics: report.diagnostics,
+    archetype: report.archetype,
+    score: report.score,
+    scoreLimits: report.scoreLimits,
+    format: report.format,
+    deck: report.deck?.mainboard || [],
+    manaAnalysis: report.manaAnalysis,
+    probabilityAnalysis: report.probabilityAnalysis,
+    cardRoles: report.cardRoles,
+    packages: report.packages,
+    catalogQuality: report.catalogQuality,
+    corvoReview: report.corvoReview,
+    externalBenchmark
+  });
+  return report;
+}
+
+function buildTechnicalJson({ commander, commanderProfile, statistics, tribalSummary, winconSummary, diagnostics, archetype, score, scoreLimits, format, deck = [], manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark }) {
   return {
     commander: commander ? {
       displayName: commander.displayName,
       canonicalName: commander.canonicalName,
-      colorIdentity: commander.colorIdentity
+      colorIdentity: commander.colorIdentity,
+      oracleText: commander.oracleText || "",
+      tags: commander.tags || []
     } : null,
     commanderProfile,
     format,
     statistics,
+    catalogQuality,
+    deck: {
+      cards: deck.map(compactCardForTechnicalJson)
+    },
+    manaAnalysis,
+    probabilityAnalysis,
+    cardRoles,
+    packages,
     tribalSummary,
     winconSummary,
     diagnostics,
     archetype,
     score,
+    scoreLimits,
+    corvoReview,
+    externalBenchmark,
     aiCandidates: findAiCandidateNames({ diagnostics, statistics })
+  };
+}
+
+function compactCardForTechnicalJson(card) {
+  return {
+    quantity: card.quantity,
+    inputName: card.inputName,
+    canonicalName: card.canonicalName,
+    printedName: card.printedName,
+    displayName: card.displayName,
+    manaValue: card.manaValue,
+    typeLine: card.typeLine,
+    oracleText: card.oracleText || "",
+    colorIdentity: card.colorIdentity || [],
+    tags: card.tags || [],
+    databaseStatus: card.databaseStatus
+  };
+}
+
+function buildCatalogQuality(statistics) {
+  return {
+    recognized: statistics.recognizedCards,
+    total: statistics.totalCardsInDecklist,
+    unrecognized: statistics.unknownCards,
+    recognitionRatio: Number((statistics.recognitionRatio || 0).toFixed(4)),
+    unrecognizedCards: statistics.unknownCardNames || []
   };
 }
 

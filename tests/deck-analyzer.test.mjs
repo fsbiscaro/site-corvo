@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { analyzeDeckRequest, findCatalogCards, parseDeckRequest, parseDeckText, runBasicDiagnostics } from "../server/deck-analyzer/index.js";
+import { analyzeDeckRequest, calculateHypergeometricProbability, findCatalogCards, parseDeckRequest, parseDeckText, runBasicDiagnostics } from "../server/deck-analyzer/index.js";
 
 const fileAssetEnv = {
   ASSETS: {
@@ -354,4 +354,32 @@ test("deck tribal sem commander profile ainda infere tribo principal", async () 
 
   assert.equal(result.tribalSummary.primaryTribe, "Dragon");
   assert.ok(result.tribalSummary.tribalCreatures > 0);
+});
+
+test("calcula probabilidade hipergeometrica para categorias", () => {
+  const probability = calculateHypergeometricProbability({
+    deckSize: 100,
+    successCount: 10,
+    cardsDrawn: 7,
+    wantedAtLeast: 1
+  });
+
+  assert.ok(probability > 0.5);
+  assert.ok(probability < 0.6);
+});
+
+test("analise completa expõe painel técnico e leitura do Corvo", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    commander: { name: "Lathril, Espada dos Elfos", colorIdentity: ["B", "G"] },
+    deckText: LATHRIL_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.ok(result.manaAnalysis.colorDemand);
+  assert.ok(result.manaAnalysis.colorProduction);
+  assert.ok(result.probabilityAnalysis.drawOdds.length > 0);
+  assert.ok(result.packages.some((item) => item.id === "mana_development"));
+  assert.ok(result.cardRoles.coreCards.length > 0 || result.cardRoles.payoffs.length > 0);
+  assert.ok(result.corvoReview.summary.includes("Lathril"));
+  assert.ok(result.renderData.probability.length > 0);
 });

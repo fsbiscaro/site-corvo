@@ -1,58 +1,224 @@
-export function buildAiTechnicalPayload(report, entries = []) {
+export const AI_MODES = {
+  STANDARD: "STANDARD_AI",
+  DEEP: "DEEP_AI"
+};
+
+const STANDARD_ORACLE_LIMIT = 12;
+const DEEP_ORACLE_LIMIT = 45;
+
+export function normalizeAiMode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["deep", "deep_ai", "profunda", "profundo"].includes(normalized)) return AI_MODES.DEEP;
+  return AI_MODES.STANDARD;
+}
+
+export function buildAiTechnicalPayload(report, options = {}) {
+  const mode = normalizeAiMode(options.mode);
+  const relevantNames = pickOracleTextNames(report, mode);
+  const cards = (report.deck?.mainboard || []).map((card) => compactCard(card, relevantNames));
+
   return {
-    commander: report.commander ? {
-      displayName: report.commander.displayName,
-      canonicalName: report.commander.canonicalName,
-      colorIdentity: report.commander.colorIdentity
-    } : null,
+    mode,
     format: report.format,
-    status: report.status,
+    commander: report.commander ? {
+      name: report.commander.displayName || report.commander.canonicalName,
+      canonicalName: report.commander.canonicalName,
+      colorIdentity: report.commander.colorIdentity || [],
+      oracleText: report.commander.oracleText || "",
+      tags: report.commander.tags || []
+    } : null,
     statistics: report.statistics,
+    catalogQuality: report.catalogQuality,
     archetype: report.archetype,
-    tribalSummary: report.tribalSummary,
-    winconSummary: report.winconSummary,
-    diagnostics: report.diagnostics,
-    score: report.score,
-    scoreLimits: report.scoreLimits,
-    deckPreview: entries.slice(0, 120).map((entry) => `${entry.quantity} ${entry.name}`)
+    wincons: report.winconSummary,
+    manaAnalysis: report.manaAnalysis,
+    probabilityAnalysis: report.probabilityAnalysis,
+    packages: report.packages,
+    cardRoles: {
+      coreCards: compactRoleCards(report.cardRoles?.coreCards),
+      payoffs: compactRoleCards(report.cardRoles?.payoffs),
+      enablers: compactRoleCards(report.cardRoles?.enablers),
+      flexSlots: compactRoleCards(report.cardRoles?.flexCards),
+      suspiciousCards: compactRoleCards(report.cardRoles?.suspiciousCards)
+    },
+    cards,
+    diagnostics: (report.diagnostics || []).map((item) => ({
+      code: item.code,
+      severity: item.severity,
+      message: item.message,
+      evidence: item.evidence,
+      suggestion: item.suggestion
+    })),
+    scoreLimits: report.scoreLimits || { maxScore: report.score?.maxScore ?? 10, reasons: [] },
+    localCorvoReview: report.corvoReview,
+    externalBenchmark: mode === AI_MODES.DEEP ? report.externalBenchmark || null : null
   };
 }
 
-export function buildAiPrompt(report, entries = []) {
+export function buildAiPrompt(report, options = {}) {
+  const mode = normalizeAiMode(options.mode);
+  const payload = buildAiTechnicalPayload(report, { mode });
+  const maxScore = payload.scoreLimits?.maxScore ?? 10;
+
   return [
-    "Voce e o analista de decks do Grimorio do Corvo.",
+    "Você é o Corvo, um analista profissional de Magic: The Gathering Commander.",
     "",
-    "Analise o deck usando SOMENTE os dados tecnicos fornecidos.",
+    "Você recebeu uma decklist já resolvida pelo catálogo local do Grimório do Corvo.",
+    "Sua função não é repetir números. Sua função é interpretar os números como um jogador experiente faria.",
     "",
-    "Regras:",
-    "- Nao altere numeros.",
-    "- Nao invente custo, tipo, cor ou texto de carta.",
-    "- Nao diga que uma carta faz algo se essa informacao nao estiver nos dados.",
-    "- Nao invente comandante.",
-    "- Nao altere o arquetipo detectado pelo backend, exceto para destacar baixa confianca quando indicado.",
-    "- Se houver cartas desconhecidas, diga que a analise pode estar incompleta.",
-    "- Se houver erro de identidade de cor, destaque isso como prioridade maxima.",
-    "- Dê sugestoes coerentes com o formato e com a identidade de cor do comandante.",
-    "- Nao sugira cartas fora da identidade de cor.",
-    "- Nao elogie demais se houver problemas estruturais.",
-    `- Respeite scoreLimits.maxScore = ${report.scoreLimits?.maxScore ?? report.score?.maxScore ?? 0}.`,
-    "- Nao use frases genericas quando houver dados especificos.",
+    "Regras obrigatórias:",
+    "- Use SOMENTE o JSON técnico fornecido como fonte de verdade.",
+    "- Não invente carta, texto, custo, cor, tipo ou função.",
+    "- Não altere números calculados pelo backend.",
+    "- Não sugira cartas fora da identidade de cor do comandante.",
+    "- Se houver cartas desconhecidas, diga que a análise pode estar incompleta.",
+    "- Respeite scoreLimits.maxScore.",
+    `- A nota final nunca pode passar de ${maxScore}.`,
+    "- Escreva em português brasileiro natural, com acentuação correta.",
+    "- Não escreva como dashboard. Escreva como consultor de deck.",
+    "- Quando usar contexto externo, trate como comparação estratégica, não como fonte dos cálculos.",
     "",
-    "Dados tecnicos:",
-    JSON.stringify(buildAiTechnicalPayload(report, entries), null, 2),
+    mode === AI_MODES.DEEP
+      ? "Modo DEEP_AI: você recebeu mais texto de cartas relevantes e, quando disponível, comparação externa de decks publicados."
+      : "Modo STANDARD_AI: você recebeu estatísticas, tags e apenas texto de cartas relevantes para economizar custo.",
     "",
-    "Formato da resposta:",
+    "A análise precisa responder: plano A, plano B, como ganha, base de mana, curva, ramp, compra, interação, proteção, dependência do comandante, cartas-chave, motores, payoffs, núcleo, flex slots, cartas suspeitas, cortes, upgrades, mulligan, matchups e plano de teste.",
+    "",
+    "Dados técnicos:",
+    JSON.stringify(payload, null, 2),
+    "",
+    "Retorne apenas JSON válido neste formato:",
     JSON.stringify({
       summary: "...",
-      gamePlan: "...",
+      planA: "...",
+      planB: "...",
+      howItWins: "...",
+      manaBase: "...",
+      curve: "...",
+      ramp: "...",
+      draw: "...",
+      interaction: "...",
+      protection: "...",
+      commanderDependency: "...",
+      keyCards: [],
+      engines: [],
+      payoffs: [],
+      coreCards: [],
+      flexCards: [],
+      suspiciousCards: [],
+      cutCandidates: [],
+      suggestedCuts: [],
+      suggestedAdds: [],
       strengths: [],
       weaknesses: [],
-      whatIsMissing: [],
-      suggestedAdds: [{ name: "...", reason: "..." }],
-      suggestedCuts: [{ name: "...", reason: "..." }],
-      upgradePlan: [],
+      upgradePriorities: [],
+      mulligan: {
+        keep: [],
+        mulligan: []
+      },
+      matchups: {
+        goodAgainst: [],
+        badAgainst: []
+      },
+      testingPlan: [],
       finalVerdict: "...",
-      score: { value: report.score?.final ?? 0, reason: "..." }
+      score: {
+        value: Math.min(7, maxScore),
+        explanation: "..."
+      }
     }, null, 2)
   ].join("\n");
+}
+
+export function parseAiAnalysisText(text, maxScore = 10) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const jsonText = extractJson(raw);
+  const parsed = JSON.parse(jsonText);
+  return normalizeAiAnalysis(parsed, maxScore);
+}
+
+export function renderAiAnalysisAsText(analysis) {
+  if (!analysis) return "";
+  const parts = [
+    analysis.summary,
+    analysis.planA ? `Plano A: ${analysis.planA}` : "",
+    analysis.planB ? `Plano B: ${analysis.planB}` : "",
+    analysis.howItWins ? `Como ganha: ${analysis.howItWins}` : "",
+    analysis.finalVerdict,
+    analysis.score?.value !== undefined ? `Nota do Corvo: ${analysis.score.value}/10. ${analysis.score.explanation || ""}` : ""
+  ].filter(Boolean);
+  return parts.join("\n\n");
+}
+
+function pickOracleTextNames(report, mode) {
+  const limit = mode === AI_MODES.DEEP ? DEEP_ORACLE_LIMIT : STANDARD_ORACLE_LIMIT;
+  const names = new Set();
+  if (report.commander?.displayName) names.add(report.commander.displayName);
+  for (const group of [
+    report.cardRoles?.coreCards,
+    report.cardRoles?.payoffs,
+    report.cardRoles?.enablers,
+    report.cardRoles?.suspiciousCards,
+    report.cardRoles?.cutCandidates
+  ]) {
+    for (const card of group || []) {
+      if (names.size >= limit) return names;
+      names.add(card.name);
+    }
+  }
+  for (const card of report.deck?.mainboard || []) {
+    if (names.size >= limit) break;
+    if (card.tags?.some((tag) => ["engine", "payoff", "finisher", "protection", "removal", "card_draw"].includes(tag))) {
+      names.add(card.displayName || card.canonicalName || card.inputName);
+    }
+  }
+  return names;
+}
+
+function compactCard(card, oracleNames) {
+  const name = card.displayName || card.canonicalName || card.inputName;
+  const item = {
+    quantity: card.quantity,
+    inputName: card.inputName,
+    canonicalName: card.canonicalName,
+    name,
+    manaValue: card.manaValue,
+    typeLine: card.typeLine,
+    colorIdentity: card.colorIdentity || [],
+    tags: card.tags || [],
+    role: null,
+    databaseStatus: card.databaseStatus
+  };
+  if (oracleNames.has(name)) item.oracleText = card.oracleText || "";
+  return item;
+}
+
+function compactRoleCards(cards = []) {
+  return cards.slice(0, 18).map((card) => ({
+    name: card.name,
+    role: card.role,
+    synergyWithCommander: card.synergyWithCommander,
+    planContribution: card.planContribution,
+    verdict: card.keepCutVerdict,
+    reason: card.reason
+  }));
+}
+
+function extractJson(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1].trim();
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  if (first >= 0 && last > first) return text.slice(first, last + 1);
+  return text;
+}
+
+function normalizeAiAnalysis(analysis, maxScore) {
+  const value = Number(analysis?.score?.value);
+  if (Number.isFinite(value) && value > maxScore) {
+    analysis.score.value = maxScore;
+    analysis.score.explanation = `${analysis.score.explanation || ""} Nota limitada pelo teto técnico calculado pelo backend.`.trim();
+  }
+  return analysis;
 }

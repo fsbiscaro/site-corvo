@@ -2112,6 +2112,144 @@ pre {
 
 
 
+.deck-section {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 13px;
+  border: 1px solid rgba(116, 70, 23, 0.16);
+  border-radius: 15px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.18), transparent 38%),
+    rgba(255, 245, 186, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 252, 220, 0.26);
+}
+
+.deck-section > h3 {
+  margin-bottom: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(116, 70, 23, 0.14);
+}
+
+.technical-panel {
+  background:
+    linear-gradient(145deg, rgba(125, 75, 24, 0.12), transparent 48%),
+    rgba(255, 245, 186, 0.15);
+}
+
+.corvo-review {
+  background:
+    linear-gradient(145deg, rgba(245, 212, 119, 0.16), transparent 42%),
+    rgba(255, 245, 186, 0.21);
+}
+
+.curve-mini-grid,
+.package-grid,
+.review-card-list,
+.mulligan-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.curve-mini-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.curve-mini-grid article,
+.package-card,
+.review-card-list article {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(116, 70, 23, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 245, 186, 0.24);
+}
+
+.curve-mini-grid strong,
+.package-card strong,
+.review-card-list strong {
+  display: block;
+  color: #2c1d0f;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.mini-bars {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(4px, 1fr));
+  align-items: end;
+  gap: 3px;
+  height: 58px;
+  margin-top: 9px;
+  padding: 6px 4px 0;
+  border-bottom: 1px solid rgba(91, 61, 24, 0.32);
+}
+
+.mini-bars span {
+  min-height: 4px;
+  max-height: 52px;
+  border-radius: 999px 999px 2px 2px;
+  background: linear-gradient(180deg, #c8892f, #6d361f);
+}
+
+.package-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.package-card {
+  display: grid;
+  gap: 5px;
+}
+
+.package-card span {
+  color: #704215;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.package-card p,
+.package-card em,
+.review-card-list span {
+  margin: 0;
+  color: rgba(44, 29, 15, 0.82);
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.42;
+}
+
+.package-card.weak,
+.package-card.needs_review {
+  background: rgba(188, 104, 37, 0.15);
+}
+
+.package-card.strong {
+  background: rgba(106, 128, 73, 0.16);
+}
+
+.package-card.excess {
+  background: rgba(136, 83, 156, 0.13);
+}
+
+.review-card-list article {
+  display: grid;
+  gap: 5px;
+}
+
+.mulligan-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.mulligan-grid h3 {
+  margin-bottom: 4px;
+  font-size: 1rem;
+}
+
+.mulligan-grid .deck-advice {
+  margin: 0;
+  padding-left: 18px;
+}
+
 @media (max-width: 1040px) {
   .member-form,
   .member-form.user-form {
@@ -3180,6 +3318,20 @@ pre {
   .deck-page-output {
     min-height: 320px;
     max-height: none;
+  }
+
+  .deck-section {
+    padding: 11px;
+  }
+
+  .curve-mini-grid,
+  .package-grid,
+  .mulligan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mini-bars {
+    height: 46px;
   }
 
   .chapter-lead {

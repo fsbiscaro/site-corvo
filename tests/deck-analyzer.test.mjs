@@ -138,6 +138,39 @@ const JURI_ARISTOCRATS_TEST_DECK = `
 1 Sol Ring
 `;
 
+const JURI_TAXONOMY_TEST_DECK = `
+20 Swamp
+15 Mountain
+1 Blood Artist
+1 Zulaport Cutthroat
+1 Bastion of Remembrance
+1 Agent of the Iron Throne
+1 Mirkwood Bats
+1 Viscera Seer
+1 Carrion Feeder
+1 Goblin Bombardment
+1 Witch's Oven
+1 High Market
+1 Pitiless Plunderer
+1 Jadar, Ghoulcaller of Nephalia
+1 Victimize
+1 Village Rites
+1 Costly Plunder
+1 Deadly Dispute
+1 Pirate's Pillage
+1 Brass's Bounty
+1 Wayfarer's Bauble
+1 Rakdos Signet
+1 Arcane Signet
+1 Talisman of Indulgence
+1 Feed the Swarm
+1 Lightning Greaves
+1 Swiftfoot Boots
+1 Act of Treason
+1 Unleash Fury
+1 Kazuul's Fury
+`;
+
 const CONTROL_TEST_DECK = `
 30 Island
 4 Counterspell
@@ -464,6 +497,27 @@ test("strategy engine reconhece Juri como aristocrats e rejeita combo sem linha"
   assert.ok(result.cardRoles.coreCards.some((card) => /Viscera Seer|Goblin Bombardment|Carrion Feeder/.test(card.name)));
 });
 
+test("aristocrats separa outlet, payoff, engine, recursao, tesouro e ramp", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    commander: { name: "Juri, Master of the Revue", colorIdentity: ["B", "R"] },
+    deckText: JURI_TAXONOMY_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  const byName = new Map(result.cardRoles.cards.map((card) => [card.name, card]));
+
+  assert.equal(result.strategy.primaryArchetype.label, "Sacrificio / Aristocrats");
+  assert.equal(byName.get("Blood Artist")?.role, "payoff");
+  assert.equal(byName.get("Goblin Bombardment")?.role, "core");
+  assert.equal(byName.get("Pitiless Plunderer")?.role, "engine");
+  assert.equal(byName.get("Victimize")?.role, "support");
+  assert.equal(byName.get("Wayfarer's Bauble")?.role, "ramp");
+  assert.notEqual(byName.get("Wayfarer's Bauble")?.reason, byName.get("Goblin Bombardment")?.reason);
+  assert.ok(!result.strategy.winConditions.some((label) => /combo/i.test(label)));
+  assert.equal(result.packages.find((item) => item.id === "protection")?.count, 2);
+  assert.notEqual(result.packages.find((item) => item.id === "protection")?.status, "strong");
+});
+
 test("strategy engine reconhece controle com respostas, wipes e compra", async () => {
   const result = await analyzeDeckRequest({
     format: "casual",
@@ -548,6 +602,8 @@ test("deck com muitas cartas desconhecidas reduz maxScore", async () => {
   }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
 
   assert.ok(result.diagnostics.some((item) => item.code === "MANY_UNKNOWN_CARDS"));
+  assert.ok(result.catalogQuality.unrecognizedDetails.length > 0);
+  assert.ok(result.catalogQuality.catalogUpdateSuggestions.length > 0);
   assert.equal(result.score.maxScore, 6.5);
 });
 

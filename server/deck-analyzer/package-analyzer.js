@@ -25,18 +25,7 @@ export function buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnal
       strongText: "A densidade de respostas esta confortavel.",
       excessText: "Interacao demais pode diluir o plano se as respostas forem muito condicionais."
     }),
-    simplePackage({
-      id: "protection",
-      label: "Protecao",
-      count: statistics.functions.protection || 0,
-      good: commanderProfile?.wantsProtection ? 3 : 2,
-      low: commanderProfile?.wantsProtection ? 2 : 1,
-      high: 8,
-      weakText: "O deck parece vulneravel quando o comandante ou motor principal sofre remocao.",
-      okText: "Ha alguma protecao para momentos-chave.",
-      strongText: "O plano tem boas ferramentas para proteger pecas importantes.",
-      excessText: "Protecao demais pode virar carta morta contra mesas lentas."
-    }),
+    protectionPackage(statistics, commanderProfile),
     winConditionPackage(winconSummary, statistics),
     synergyPackage(commanderProfile, tribalSummary, statistics),
     optionalPackage("sacrifice", "Sacrificio", statistics.functions.sacrificeOutlets || 0, statistics.tagCounts.sacrifice || 0),
@@ -49,6 +38,34 @@ export function buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnal
     ...item,
     relatedCards: relatedCardsForPackage(item.id, cardRoles)
   }));
+}
+
+function protectionPackage(statistics, commanderProfile) {
+  const count = statistics.functions.protection || 0;
+  let status = "ok";
+  if (count <= 1) status = "weak";
+  else if (count >= 5) status = "strong";
+  else if (count >= 3) status = "ok";
+
+  return {
+    id: "protection",
+    label: "Protecao",
+    count,
+    status,
+    interpretation: count <= 1
+      ? "Protecao baixa para comandante, motor ou peca-chave."
+      : count === 2
+        ? "Duas protecoes ajudam, mas ainda ficam no limite baixo para Commander."
+        : count <= 4
+          ? "Pacote de protecao funcional, mas ainda precisa ser testado contra mesas com muita remocao."
+          : "Protecao forte para preservar comandante e pecas importantes.",
+    risk: count <= 2 || commanderProfile?.wantsProtection
+      ? "Se o plano depende do comandante ou de engines, remocoes pontuais podem quebrar seu ritmo."
+      : "Categoria em faixa funcional.",
+    action: count <= 2
+      ? "Teste se o deck perde quando removem comandante/outlet/payoff; se sim, suba para 3-4 protecoes."
+      : "Mantenha em observacao nos testes."
+  };
 }
 
 function manaDevelopmentPackage(statistics, manaAnalysis) {
@@ -145,9 +162,9 @@ function relatedCardsForPackage(id, cardRoles) {
     card_advantage: ["card_advantage"],
     interaction: ["interaction"],
     protection: ["protection"],
-    win_conditions: ["payoff", "finisher"],
-    commander_synergy: ["core", "enabler", "payoff"],
-    sacrifice: ["enabler", "payoff"],
+    win_conditions: ["payoff", "engine", "finisher"],
+    commander_synergy: ["core", "enabler", "engine", "payoff"],
+    sacrifice: ["core", "enabler", "engine", "payoff"],
     graveyard: ["card_advantage", "support"],
     tokens: ["enabler", "payoff"],
     hate: ["interaction"]

@@ -24,6 +24,7 @@ export { buildDeckScore, buildScoreCards } from "./score.js";
 export { buildTribalSummary } from "./tribal-analyzer.js";
 export { COMMANDER_FORMATS } from "./types.js";
 export { detectStrategySignals } from "./strategy-signal-detector.js";
+export { classifyAristocratsFunction, isRealSacrificeOutlet, isDeathOrDrainPayoff } from "./function-taxonomy.js";
 export { detectWincons } from "./wincon-detector.js";
 
 export function parseDeckRequest(deckText, format = "casual") {

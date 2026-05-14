@@ -351,8 +351,37 @@ function buildCatalogQuality(statistics) {
     total: statistics.totalCardsInDecklist,
     unrecognized: statistics.unknownCards,
     recognitionRatio: Number((statistics.recognitionRatio || 0).toFixed(4)),
-    unrecognizedCards: statistics.unknownCardNames || []
+    unrecognizedCards: statistics.unknownCardNames || [],
+    unrecognizedDetails: buildUnrecognizedDetails(statistics),
+    catalogUpdateSuggestions: buildCatalogUpdateSuggestions(statistics)
   };
+}
+
+function buildUnrecognizedDetails(statistics) {
+  return (statistics.unknownCardNames || []).map((name) => ({
+    inputName: name,
+    reason: "Nao houve match exato em nome canonico, nomes impressos traduzidos ou fallback local.",
+    checks: {
+      accentInsensitiveName: true,
+      englishCanonicalName: true,
+      printedNamesAliases: true,
+      parentheticalName: true,
+      splitCardFaces: true
+    }
+  }));
+}
+
+function buildCatalogUpdateSuggestions(statistics) {
+  return (statistics.unknownCardNames || []).map((name) => ({
+    inputName: name,
+    normalizedName: String(name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim(),
+    action: "review_alias_or_add_card",
+    needsReview: true
+  }));
 }
 
 function mergeCards(cards) {

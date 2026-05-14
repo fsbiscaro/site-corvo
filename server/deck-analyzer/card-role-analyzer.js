@@ -1,3 +1,7 @@
+import {
+  classifyAristocratsFunction
+} from "./function-taxonomy.js";
+
 const ROLE_LIMIT = 14;
 
 export function analyzeCardRoles({ cards = [], commander = null, commanderProfile = null, tribalSummary = null, winconSummary = null, archetype = null, strategy = null, strategySignals = null }) {
@@ -5,9 +9,9 @@ export function analyzeCardRoles({ cards = [], commander = null, commanderProfil
   const roles = cards.map((card) => classifyCardRole({ card, commander, commanderProfile, tribalSummary, winconSummary, archetype, strategy, strategySignals, primaryId }));
   return {
     cards: roles,
-    coreCards: takeByVerdict(roles, "keep", ["core", "payoff", "finisher"], ROLE_LIMIT),
+    coreCards: takeByVerdict(roles, "keep", ["core", "payoff", "engine", "finisher"], ROLE_LIMIT),
     supportCards: takeByRole(roles, ["support", "card_advantage", "ramp"], ROLE_LIMIT),
-    enablers: takeByRole(roles, ["enabler", "ramp"], ROLE_LIMIT),
+    enablers: takeByRole(roles, ["enabler", "engine", "ramp"], ROLE_LIMIT),
     payoffs: takeByRole(roles, ["payoff", "finisher"], ROLE_LIMIT),
     flexCards: takeByRole(roles, ["flex"], ROLE_LIMIT),
     unknownCards: takeByRole(roles, ["unknown"], ROLE_LIMIT),
@@ -31,21 +35,12 @@ function classifyCardRole({ card, commanderProfile, tribalSummary, winconSummary
     keepCutVerdict = "review";
     synergyWithCommander = "unknown";
     reason = "Carta pendente de reconhecimento no catalogo local; nao deve ser marcada como corte antes da revisao.";
-  } else if (isAristocrats(primaryId) && isSacrificeOutlet(card, tags)) {
-    role = "core";
-    keepCutVerdict = "keep";
-    synergyWithCommander = "high";
-    reason = "Em aristocrats, outlet de sacrificio e uma das pecas que liga fodder a payoff.";
-  } else if (isAristocrats(primaryId) && isDeathPayoff(card, tags)) {
-    role = "payoff";
-    keepCutVerdict = "keep";
-    synergyWithCommander = "high";
-    reason = "Converte criaturas/permanentes morrendo em dano, drain ou valor; e payoff central do plano.";
-  } else if (isAristocrats(primaryId) && hasAny(tags, ["token_generator", "treasure", "recursion"])) {
-    role = "enabler";
-    keepCutVerdict = "support";
-    synergyWithCommander = "high";
-    reason = "Alimenta o motor de sacrificio com recursos recorrentes, fichas, tesouros ou recursao.";
+  } else if (isAristocrats(primaryId) && classifyAristocratsFunction(card)) {
+    const classified = classifyAristocratsRole(card);
+    role = classified.role;
+    keepCutVerdict = classified.keepCutVerdict;
+    synergyWithCommander = classified.synergyWithCommander;
+    reason = classified.reason;
   } else if (isStealEffect(card) && isAristocrats(primaryId) && (strategySignals?.signals?.sacrifice_outlet_count || 0) >= 2) {
     role = "enabler";
     keepCutVerdict = "support";
@@ -139,7 +134,7 @@ function classifyCardRole({ card, commanderProfile, tribalSummary, winconSummary
     reason = "Carta cara sem funcao central detectada; pode ser boa, mas precisa provar impacto em jogo.";
   }
 
-  if (isGenericStaple(card, tags) && role === "core" && !["artifacts", "big_mana_ramp"].includes(primaryId)) {
+  if (isGenericStaple(card, tags) && role === "core" && !classifyAristocratsFunction(card) && !["artifacts", "big_mana_ramp"].includes(primaryId)) {
     role = "support";
     keepCutVerdict = "support";
     reason = "Carta forte e util, mas nao define sozinha o plano principal do deck.";
@@ -213,19 +208,6 @@ function matchesTribe(card, tribalSummary) {
   return (card.subtypes || []).includes(tribalSummary.primaryTribe) || hasAny(new Set(card.tags || []), ["tribal_payoff", "lord", "anthem"]);
 }
 
-function isSacrificeOutlet(card, tags) {
-  const text = textOf(card);
-  if (!/sacrifice/i.test(text)) return false;
-  if (/sacrifice a clue|sacrifice this artifact: draw a card|blood token|food token/i.test(text)) return false;
-  return /sacrifice (a|another|this|an|one or more) [^.:]*(creature|artifact|permanent|token)|sacrifice [^.:]*(creature|artifact|permanent):/i.test(text);
-}
-
-function isDeathPayoff(card, tags) {
-  const text = textOf(card);
-  if (/whenever you sacrifice a clue/i.test(text)) return false;
-  return hasAny(tags, ["death_trigger", "drain", "payoff"]) && /dies|graveyard|sacrifice|opponent loses|lose life/i.test(text);
-}
-
 function isStealEffect(card) {
   return /gain control of target|until end of turn/i.test(textOf(card));
 }
@@ -250,6 +232,90 @@ function isGenericStaple(card, tags) {
   const name = String(card.displayName || card.canonicalName || card.inputName || "").toLowerCase();
   if (["sol ring", "arcane signet", "command tower"].includes(name)) return true;
   return hasAny(tags, ["removal", "counterspell", "board_wipe"]) && !hasAny(tags, ["payoff", "tribal_payoff"]);
+}
+
+function classifyAristocratsRole(card) {
+  const type = classifyAristocratsFunction(card);
+  const name = card.displayName || card.canonicalName || card.inputName || "Carta";
+
+  if (type === "free_sacrifice_outlet" || type === "sacrifice_outlet") {
+    return {
+      role: "core",
+      keepCutVerdict: "keep",
+      synergyWithCommander: "high",
+      reason: `${name} e outlet ${type === "free_sacrifice_outlet" ? "gratuito/recorrente" : "de sacrificio"}: permite transformar fodder em gatilhos de morte, dano ou valor no momento certo.`
+    };
+  }
+
+  if (type === "sacrifice_payoff") {
+    return {
+      role: "payoff",
+      keepCutVerdict: "keep",
+      synergyWithCommander: "high",
+      reason: `${name} e payoff central de aristocrats: converte mortes ou sacrificios em drain, dano ou vantagem, ajudando o deck a vencer sem depender de combate.`
+    };
+  }
+
+  if (type === "engine") {
+    return {
+      role: "engine",
+      keepCutVerdict: "keep",
+      synergyWithCommander: "high",
+      reason: `${name} e engine do plano: transforma criaturas, mortes ou artefatos em recurso repetido para manter o motor de sacrificio funcionando.`
+    };
+  }
+
+  if (type === "draw_by_sacrifice") {
+    return {
+      role: "card_advantage",
+      keepCutVerdict: "support",
+      synergyWithCommander: "high",
+      reason: `${name} compra cartas usando sacrificio como custo. E suporte forte, mas nao e outlet repetivel nem payoff de vitoria.`
+    };
+  }
+
+  if (type === "recursion") {
+    return {
+      role: "support",
+      keepCutVerdict: "support",
+      synergyWithCommander: "high",
+      reason: `${name} oferece recursao. Em aristocrats, isso ajuda a reconstruir a mesa ou transformar uma criatura sacrificada em novas pecas.`
+    };
+  }
+
+  if (type === "treasure_value") {
+    return {
+      role: "support",
+      keepCutVerdict: "support",
+      synergyWithCommander: "medium",
+      reason: `${name} gera tesouros/valor para acelerar jogadas e alimentar artefatos, mas nao e outlet de sacrificio.`
+    };
+  }
+
+  if (type === "ramp_fixing") {
+    return {
+      role: "ramp",
+      keepCutVerdict: "support",
+      synergyWithCommander: "medium",
+      reason: `${name} desenvolve mana ou corrige cores. Ajuda o deck a jogar, mas nao e peca central do motor de aristocrats.`
+    };
+  }
+
+  if (type === "fling_effect") {
+    return {
+      role: "finisher",
+      keepCutVerdict: "support",
+      synergyWithCommander: "high",
+      reason: `${name} pode converter uma criatura grande, como Juri acumulado, em dano direto para finalizar partidas.`
+    };
+  }
+
+  return {
+    role: "support",
+    keepCutVerdict: "support",
+    synergyWithCommander: "medium",
+    reason: `${name} tem sacrificio como custo ou suporte pontual, mas nao funciona como outlet repetivel do motor.`
+  };
 }
 
 function textOf(card) {

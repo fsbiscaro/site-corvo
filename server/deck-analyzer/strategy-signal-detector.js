@@ -1,4 +1,12 @@
 import { GENERIC_TRIBES } from "./types.js";
+import {
+  isAristocratsEngine,
+  isDeathOrDrainPayoff,
+  isFreeSacrificeOutlet as isFreeSacrificeOutletStrict,
+  isRealSacrificeOutlet,
+  isRecursionSupport,
+  isTreasureValue
+} from "./function-taxonomy.js";
 
 const BASIC_LANDS = new Set(["plains", "island", "swamp", "mountain", "forest"]);
 
@@ -35,15 +43,15 @@ export function detectStrategySignals({ cards = [], commander = null, commanderP
   signals.burst_mana_count = statistics.mana?.burstMana || countByTags(cards, ["burst_mana", "ritual"]);
   signals.cost_reducer_count = statistics.mana?.costReducers || countByTags(cards, ["cost_reducer"]);
 
-  signals.sacrifice_outlet_count = countCards(cards, isSacrificeOutlet);
-  signals.free_sacrifice_outlet_count = countCards(cards, isFreeSacrificeOutlet);
+  signals.sacrifice_outlet_count = countCards(cards, isRealSacrificeOutlet);
+  signals.free_sacrifice_outlet_count = countCards(cards, isFreeSacrificeOutletStrict);
   signals.token_generator_count = statistics.functions?.tokenGenerators || countByTags(cards, ["token_generator", "tribal_token_generator"]);
   signals.treasure_count = countCards(cards, isTreasureCard);
   signals.recurring_treasure_count = countCards(cards, (card) => isTreasureCard(card) && matchesText(card, /whenever|at the beginning|each|one or more/i));
   signals.fodder_count = signals.token_generator_count + signals.treasure_count + countCards(cards, isRecursiveFodder);
-  signals.death_payoff_count = countCards(cards, isDeathPayoff);
-  signals.drain_payoff_count = countCards(cards, (card) => hasAnyTag(card, ["drain"]) || matchesText(card, /each opponent loses|target opponent loses|whenever .* dies.* loses/i));
-  signals.aristocrats_engine_count = signals.sacrifice_outlet_count + signals.death_payoff_count + signals.fodder_count;
+  signals.death_payoff_count = countCards(cards, isDeathOrDrainPayoff);
+  signals.drain_payoff_count = countCards(cards, isDeathOrDrainPayoff);
+  signals.aristocrats_engine_count = signals.sacrifice_outlet_count + signals.death_payoff_count + signals.fodder_count + countCards(cards, isAristocratsEngine);
 
   signals.tribal_density = tribalSummary?.tribalCreatureRatio || 0;
   signals.tribal_creature_count = tribalSummary?.tribalCreatures || 0;
@@ -150,8 +158,8 @@ function detectComboLines(cards, commander, commanderProfile) {
 
 function attachSignalCards(details, cards) {
   const groups = {
-    sacrifice_outlets: (card) => isSacrificeOutlet(card),
-    death_payoffs: (card) => isDeathPayoff(card),
+    sacrifice_outlets: (card) => isRealSacrificeOutlet(card),
+    death_payoffs: (card) => isDeathOrDrainPayoff(card),
     fodder: (card) => hasAnyTag(card, ["token_generator"]) || isTreasureCard(card) || isRecursiveFodder(card),
     interaction: (card) => hasAnyTag(card, ["interaction", "removal", "counterspell", "board_wipe"]),
     card_draw: (card) => hasAnyTag(card, ["card_draw", "card_selection"]),
@@ -169,32 +177,12 @@ function isThreat(card) {
   return hasType(card, "Creature") || hasType(card, "Planeswalker") || hasAnyTag(card, ["threat", "finisher", "payoff"]);
 }
 
-function isSacrificeOutlet(card) {
-  const text = textOf(card);
-  if (!/sacrifice/i.test(text)) return false;
-  if (/sacrifice a clue|sacrifice this artifact: draw a card|blood token|food token/i.test(text)) return false;
-  return /sacrifice (a|another|this|an|one or more) [^.:]*(creature|artifact|permanent|token)|sacrifice [^.:]*(creature|artifact|permanent):/i.test(text);
-}
-
-function isFreeSacrificeOutlet(card) {
-  if (!isSacrificeOutlet(card)) return false;
-  const text = textOf(card);
-  if (/\{t\}|tap|mana cost|pay \d|pay [a-z]+ mana/i.test(text)) return false;
-  return true;
-}
-
 function isTreasureCard(card) {
-  return hasAnyTag(card, ["treasure"]) || matchesText(card, /treasure token|treasures/i);
+  return hasAnyTag(card, ["treasure", "treasure_generator"]) || isTreasureValue(card);
 }
 
 function isRecursiveFodder(card) {
-  return hasType(card, "Creature") && matchesText(card, /return .* from your graveyard to the battlefield|return .* from your graveyard to your hand|escape|disturb|unearth/i);
-}
-
-function isDeathPayoff(card) {
-  const text = textOf(card);
-  if (/whenever you sacrifice a clue/i.test(text)) return false;
-  return hasAnyTag(card, ["death_trigger", "aristocrats"]) || /whenever .* dies|whenever .* is put into a graveyard|whenever you sacrifice|dies, each opponent|each opponent loses/i.test(text);
+  return hasType(card, "Creature") && (isRecursionSupport(card) || matchesText(card, /escape|disturb|unearth/i));
 }
 
 function isReanimationCard(card) {

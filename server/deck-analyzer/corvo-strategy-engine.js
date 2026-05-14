@@ -654,12 +654,18 @@ function isHardRejected(id, rejected) {
 }
 
 function buildStrategyWincons({ primary, secondary, winconSummary, signals }) {
-  const labels = new Set((winconSummary?.primaryWincons || []).map((item) => item.label));
+  const labels = new Set((winconSummary?.primaryWincons || [])
+    .filter((item) => item.type !== "combo" || (signals.combo_line_count || 0) > 0)
+    .map((item) => item.label));
   for (const id of [primary.id, ...(secondary || []).map((item) => item.id)]) {
     const model = getArchetypeModel(id) || (String(id).startsWith("profile:") ? null : null);
-    for (const wincon of model?.expectedWincons || []) labels.add(labelWincon(wincon));
+    for (const wincon of model?.expectedWincons || []) {
+      if ((wincon === "combo" || wincon === "combo_loop") && (signals.combo_line_count || 0) === 0) continue;
+      labels.add(labelWincon(wincon));
+    }
   }
   if (primary.id.includes("aristocrats") || signals.drain_payoff_count >= 2) labels.add("Drain e gatilhos de morte");
+  if (primary.id.includes("aristocrats") && signals.sacrifice_outlet_count >= 1) labels.add("Dano por sacrificio e Juri grande morrendo");
   if (primary.id === "control") labels.add("Finalizador protegido depois de estabilizar");
   if (primary.id === "voltron") labels.add("Dano de comandante");
   return [...labels].filter(Boolean).slice(0, 5);

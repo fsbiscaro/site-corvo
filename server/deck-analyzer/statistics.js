@@ -1,4 +1,5 @@
 import { CARD_TYPE_LABELS, COMMANDER_FORMATS, CREATURE_ROLE_TAGS, FUNCTION_KEYS } from "./types.js";
+import { isDeathOrDrainPayoff, isRealSacrificeOutlet } from "./function-taxonomy.js";
 
 export function buildDeckSummary(parsedDeck) {
   return {
@@ -169,6 +170,14 @@ export function buildDeckStatistics({ cards = [], parsedDeck, commander = null, 
 
 function countFunctions(card, functionCounts, quantity) {
   for (const [key, tags] of Object.entries(FUNCTION_KEYS)) {
+    if (key === "sacrificeOutlets") {
+      if (isRealSacrificeOutlet(card)) functionCounts[key] += quantity;
+      continue;
+    }
+    if (key === "payoffs" || key === "finishers") {
+      if (card.tags?.some((tag) => tags.includes(tag)) || isDeathOrDrainPayoff(card)) functionCounts[key] += quantity;
+      continue;
+    }
     if (card.tags?.some((tag) => tags.includes(tag))) functionCounts[key] += quantity;
   }
 }

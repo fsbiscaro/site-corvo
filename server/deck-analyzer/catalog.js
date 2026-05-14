@@ -1,5 +1,15 @@
 import { findCardInDatabase, normalizeCardName as normalizeFallbackName } from "./card-database.js";
 import { COLOR_ORDER, RECOGNIZED_CARD_TYPES, SUPERTYPES, TRIBAL_TAG_BY_SUBTYPE } from "./types.js";
+import {
+  isAristocratsEngine,
+  isDeathOrDrainPayoff,
+  isDrawBySacrifice,
+  isFreeSacrificeOutlet,
+  isRealSacrificeOutlet,
+  isRecursionSupport,
+  isSacrificeCostOnly,
+  isTreasureValue
+} from "./function-taxonomy.js";
 
 const CATALOG_ROOT = "/assets/data/card-catalog/buckets";
 const BUCKET_CACHE = new Map();
@@ -59,7 +69,8 @@ export async function resolveCommanderCard(commander, env, requestUrl) {
 
 export async function findCatalogCards(names, env, requestUrl) {
   const result = new Map();
-  const bucketNames = [...new Set((names || []).map(bucketKeyForName))];
+  const lookupPlans = new Map((names || []).map((name) => [name, buildNameLookupPlan(name)]));
+  const bucketNames = [...new Set([...lookupPlans.values()].flatMap((plan) => plan.candidates.map((candidate) => bucketKeyForName(candidate.value))))];
   const buckets = new Map();
 
   await Promise.all(bucketNames.map(async (key) => {
@@ -68,13 +79,52 @@ export async function findCatalogCards(names, env, requestUrl) {
 
   for (const name of names || []) {
     const normalized = normalizeCardName(name);
-    const bucket = buckets.get(bucketKeyForName(name));
-    const fromCatalog = lookupBucket(bucket, normalized);
+    const plan = lookupPlans.get(name) || buildNameLookupPlan(name);
+    let fromCatalog = null;
+    let matchedCandidate = null;
+
+    for (const candidate of plan.candidates) {
+      const candidateNormalized = normalizeCardName(candidate.value);
+      const bucket = buckets.get(bucketKeyForName(candidate.value));
+      fromCatalog = lookupBucket(bucket, candidateNormalized);
+      if (fromCatalog) {
+        matchedCandidate = candidate;
+        break;
+      }
+    }
+
     const fallback = fromCatalog || fallbackCardInfo(name);
+    if (fallback) {
+      fallback.lookup = {
+        inputName: name,
+        matchedName: matchedCandidate?.value || fallback.canonicalName || fallback.name || name,
+        method: matchedCandidate?.method || (fromCatalog ? "catalog" : "fallback_database"),
+        attempts: plan.candidates
+      };
+    }
     if (fallback) result.set(normalized, fallback);
   }
 
   return result;
+}
+
+export function buildNameLookupPlan(name) {
+  const raw = String(name || "").trim();
+  const candidates = [];
+  addCandidate(candidates, raw, "input");
+  addCandidate(candidates, stripOuterQuantity(raw), "quantity_stripped");
+  for (const inner of parentheticalCandidates(raw)) addCandidate(candidates, inner, "parenthetical");
+  for (const face of splitFaceCandidates(raw)) addCandidate(candidates, face, "split_face");
+  addCandidate(candidates, stripParentheticalTail(raw), "set_or_parenthetical_tail_stripped");
+  addCandidate(candidates, raw.replace(/[’]/g, "'"), "apostrophe_normalized");
+  addCandidate(candidates, raw.normalize("NFD").replace(/[\u0300-\u036f]/g, ""), "accentless");
+
+  return {
+    inputName: raw,
+    normalizedInput: normalizeCardName(raw),
+    candidates: dedupeCandidates(candidates),
+    lookupSources: ["catalog canonical name", "catalog printedNames aliases", "fallback curated database"]
+  };
 }
 
 export async function loadCatalogBucket(key, env, requestUrl) {
@@ -207,6 +257,7 @@ function fallbackCardInfo(name) {
 
 function enrichParsedCard(card, info) {
   if (!info) {
+    const lookup = buildNameLookupPlan(card.name);
     return {
       ...card,
       inputName: card.name,
@@ -222,7 +273,20 @@ function enrichParsedCard(card, info) {
       colorIdentity: [],
       legalities: {},
       tags: ["needs_review"],
-      databaseStatus: "unknown"
+      databaseStatus: "unknown",
+      resolutionDebug: {
+        reason: "Nenhuma carta aprovada foi encontrada no catalogo para as variantes tentadas.",
+        triedAccentless: lookup.candidates.some((candidate) => candidate.method === "accentless"),
+        triedEnglishOrPrintedAlias: true,
+        triedParenthetical: lookup.candidates.some((candidate) => candidate.method === "parenthetical"),
+        triedSplitCard: lookup.candidates.some((candidate) => candidate.method === "split_face"),
+        attempts: lookup.candidates,
+        suggestedAlias: {
+          inputName: card.name,
+          normalizedName: lookup.normalizedInput,
+          status: "needs_review"
+        }
+      }
     };
   }
 
@@ -251,8 +315,45 @@ function enrichParsedCard(card, info) {
     imageUrl: info.imageUrl,
     thumbnailUrl: info.thumbnailUrl,
     needsReview: info.needsReview,
-    databaseStatus: info.needsReview ? "needs_review" : "found"
+    databaseStatus: info.needsReview ? "needs_review" : "found",
+    resolutionDebug: info.lookup || null
   };
+}
+
+function addCandidate(target, value, method) {
+  const clean = String(value || "").trim();
+  if (!clean) return;
+  target.push({ value: clean, normalized: normalizeCardName(clean), method });
+}
+
+function dedupeCandidates(candidates) {
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    if (!candidate.normalized || seen.has(candidate.normalized)) return false;
+    seen.add(candidate.normalized);
+    return true;
+  });
+}
+
+function stripOuterQuantity(value) {
+  return String(value || "").replace(/^\s*\d+\s+/, "").trim();
+}
+
+function parentheticalCandidates(value) {
+  return [...String(value || "").matchAll(/\(([^)]+)\)/g)]
+    .map((match) => match[1])
+    .filter((inner) => inner && !/^[A-Z0-9]{2,5}$/i.test(inner));
+}
+
+function splitFaceCandidates(value) {
+  return String(value || "")
+    .split(/\s*\/\/\s*/)
+    .map((item) => item.trim())
+    .filter((item) => item && item !== value);
+}
+
+function stripParentheticalTail(value) {
+  return String(value || "").replace(/\s+\([A-Za-z0-9]{2,8}\)(?:\s+[A-Za-z0-9★-]+)?\s*$/, "").trim();
 }
 
 function normalizeCatalogCard(card) {
@@ -355,8 +456,19 @@ function inferTags(card) {
   if (oracleText.includes("gain life") || oracleText.includes("lifelink")) tags.add("lifegain");
   if (oracleText.includes("return target") && oracleText.includes("graveyard")) tags.add("recursion");
   if (oracleText.includes("sacrifice")) tags.add("sacrifice");
-  if (oracleText.match(/sacrifice [^\.]+:/)) tags.add("sacrifice_outlet");
-  if (oracleText.includes("hexproof") || oracleText.includes("indestructible") || oracleText.includes("protection from") || oracleText.includes("regenerate")) tags.add("protection");
+  if (isRealSacrificeOutlet(card)) tags.add("sacrifice_outlet");
+  if (isFreeSacrificeOutlet(card)) tags.add("free_sacrifice_outlet");
+  if (isSacrificeCostOnly(card)) tags.add("sacrifice_cost");
+  if (isDeathOrDrainPayoff(card)) {
+    tags.add("sacrifice_payoff");
+    tags.add("death_trigger");
+    tags.add("payoff");
+  }
+  if (isDrawBySacrifice(card)) tags.add("draw_by_sacrifice");
+  if (isRecursionSupport(card)) tags.add("recursion");
+  if (isTreasureValue(card)) tags.add("treasure_generator");
+  if (isAristocratsEngine(card)) tags.add("engine");
+  if (oracleText.includes("hexproof") || oracleText.includes("shroud") || oracleText.includes("indestructible") || oracleText.includes("protection from") || oracleText.includes("regenerate")) tags.add("protection");
   if (oracleText.includes("ward")) tags.add("protection");
   if (oracleText.includes("flying")) {
     tags.add("flying");

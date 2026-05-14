@@ -86,10 +86,14 @@ function scoreDrain(statistics, commanderProfile) {
 
 function scoreCombo(statistics, commanderProfile) {
   let score = 0;
-  if ((statistics.functions?.tutors || 0) >= 2) score += 0.2;
-  if ((statistics.functions?.cardDraw || 0) >= 6) score += 0.15;
-  if ((statistics.mana?.burstMana || 0) >= 2 || (statistics.tagCounts?.ritual || 0) >= 2) score += 0.2;
-  if (commanderProfile?.winconHints?.includes("combo")) score += 0.2;
+  const explicitPieces = statistics.tagCounts?.combo_piece || 0;
+  const profileCombo = commanderProfile?.winconHints?.includes("combo");
+  if (!profileCombo && explicitPieces < 2) return 0;
+  if (explicitPieces >= 2) score += 0.35;
+  if ((statistics.functions?.tutors || 0) >= 2) score += 0.15;
+  if ((statistics.functions?.cardDraw || 0) >= 6) score += 0.1;
+  if ((statistics.mana?.burstMana || 0) >= 2 || (statistics.tagCounts?.ritual || 0) >= 2) score += 0.15;
+  if (profileCombo) score += 0.15;
   return score;
 }
 

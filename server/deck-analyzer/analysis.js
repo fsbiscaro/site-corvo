@@ -2,6 +2,7 @@ import { detectArchetype } from "./archetype-detector.js";
 import { findAiCandidateNames } from "./analysis-helpers.js";
 import { analyzeCardRoles } from "./card-role-analyzer.js";
 import { findCommanderProfile } from "./commander-profiles.js";
+import { buildCorvoStrategy, strategyToLegacyArchetype } from "./corvo-strategy-engine.js";
 import { enrichCardsWithCatalog, normalizeCardName, resolveCommanderCard } from "./catalog.js";
 import { buildCorvoReview } from "./corvo-review-engine.js";
 import { buildDiagnostics } from "./diagnostics.js";
@@ -12,6 +13,7 @@ import { parseDeckText } from "./parser.js";
 import { buildProbabilityAnalysis } from "./probability-analysis.js";
 import { buildRendererData } from "./renderer-data.js";
 import { buildScoreCards, buildDeckScore } from "./score.js";
+import { detectStrategySignals } from "./strategy-signal-detector.js";
 import { buildDeckStatistics } from "./statistics.js";
 import { buildTribalSummary } from "./tribal-analyzer.js";
 import { detectWincons } from "./wincon-detector.js";
@@ -29,16 +31,28 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   const tribalSummary = buildTribalSummary({ cards: enrichedDeck, commanderProfile });
   const validation = validateFormatRules({ format: normalizedFormat, commander: selectedCommander, statistics, cards: enrichedDeck, parsedDeck: parsed });
   const winconSummary = detectWincons({ statistics, tribalSummary, commanderProfile, commander: selectedCommander });
-  const archetype = detectArchetype({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, tagCounts: statistics.tagCounts, enrichedDeck, winconSummary });
+  const strategySignals = detectStrategySignals({ cards: enrichedDeck, commander: selectedCommander, commanderProfile, tribalSummary, statistics, winconSummary });
+  const strategy = buildCorvoStrategy({
+    signals: strategySignals.signals,
+    signalDetails: strategySignals.details,
+    commander: selectedCommander,
+    commanderProfile,
+    tribalSummary,
+    statistics,
+    winconSummary,
+    cards: enrichedDeck
+  });
+  const legacyArchetype = detectArchetype({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, tagCounts: statistics.tagCounts, enrichedDeck, winconSummary });
+  const archetype = strategyToLegacyArchetype(strategy, legacyArchetype);
   const diagnostics = buildDiagnostics({ format: normalizedFormat, commander: selectedCommander, commanderProfile, statistics, validation, tribalSummary, winconSummary, archetype });
   const score = buildDeckScore({ format: normalizedFormat, statistics, validation, archetype, commanderProfile, tribalSummary, winconSummary });
   const scoreLimits = { maxScore: score.maxScore, reasons: score.limitReasons };
   const manaAnalysis = buildManaAnalysis({ cards: enrichedDeck, commander: selectedCommander, statistics });
   const probabilityAnalysis = buildProbabilityAnalysis({ statistics });
-  const cardRoles = analyzeCardRoles({ cards: enrichedDeck, commander: selectedCommander, commanderProfile, tribalSummary, winconSummary, archetype });
+  const cardRoles = analyzeCardRoles({ cards: enrichedDeck, commander: selectedCommander, commanderProfile, tribalSummary, winconSummary, archetype, strategy, strategySignals });
   const packages = buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnalysis, cardRoles, commanderProfile, tribalSummary, winconSummary });
   const catalogQuality = buildCatalogQuality(statistics);
-  const corvoReview = buildCorvoReview({ commander: selectedCommander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, tribalSummary, score, diagnostics, externalBenchmark: null });
+  const corvoReview = buildCorvoReview({ commander: selectedCommander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, strategy, tribalSummary, score, diagnostics, externalBenchmark: null });
   const scores = buildScoreCards(score, statistics);
   const renderData = buildRendererData({ commander: selectedCommander, statistics, tribalSummary, score, archetype, winconSummary, manaAnalysis, probabilityAnalysis, packages, cardRoles });
 
@@ -55,6 +69,8 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
       statistics,
       tribalSummary,
       winconSummary,
+      strategy,
+      strategySignals,
       manaAnalysis,
       probabilityAnalysis,
       cardRoles,
@@ -93,6 +109,8 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     statistics,
     tribalSummary,
     winconSummary,
+    strategy,
+    strategySignals,
     manaAnalysis,
     probabilityAnalysis,
     cardRoles,
@@ -119,7 +137,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     playtest: buildPlaytestPlan({ statistics, winconSummary }),
     corvoNote: buildCorvoNote({ commander: selectedCommander, commanderProfile, statistics, archetype, tribalSummary }),
     renderData,
-    technicalJson: buildTechnicalJson({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, winconSummary, diagnostics, archetype, score, scoreLimits, format: normalizedFormat, deck: enrichedDeck, manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark: null }),
+    technicalJson: buildTechnicalJson({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, winconSummary, strategy, strategySignals, diagnostics, archetype, score, scoreLimits, format: normalizedFormat, deck: enrichedDeck, manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark: null }),
     aiAnalysis: null,
     aiText: ""
   };
@@ -245,6 +263,7 @@ export function attachExternalBenchmark(report, externalBenchmark = null) {
       packages: report.packages,
       winconSummary: report.winconSummary,
       archetype: report.archetype,
+      strategy: report.strategy,
       tribalSummary: report.tribalSummary,
       score: report.score,
       diagnostics: report.diagnostics,
@@ -257,6 +276,8 @@ export function attachExternalBenchmark(report, externalBenchmark = null) {
     statistics: report.statistics,
     tribalSummary: report.tribalSummary,
     winconSummary: report.winconSummary,
+    strategy: report.strategy,
+    strategySignals: report.strategySignals,
     diagnostics: report.diagnostics,
     archetype: report.archetype,
     score: report.score,
@@ -274,7 +295,7 @@ export function attachExternalBenchmark(report, externalBenchmark = null) {
   return report;
 }
 
-function buildTechnicalJson({ commander, commanderProfile, statistics, tribalSummary, winconSummary, diagnostics, archetype, score, scoreLimits, format, deck = [], manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark }) {
+function buildTechnicalJson({ commander, commanderProfile, statistics, tribalSummary, winconSummary, strategy, strategySignals, diagnostics, archetype, score, scoreLimits, format, deck = [], manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark }) {
   return {
     commander: commander ? {
       displayName: commander.displayName,
@@ -296,6 +317,8 @@ function buildTechnicalJson({ commander, commanderProfile, statistics, tribalSum
     packages,
     tribalSummary,
     winconSummary,
+    strategy,
+    strategySignals,
     diagnostics,
     archetype,
     score,

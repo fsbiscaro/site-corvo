@@ -1,19 +1,20 @@
-export function buildCorvoReview({ commander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, tribalSummary, score, diagnostics, externalBenchmark }) {
+export function buildCorvoReview({ commander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, strategy, tribalSummary, score, diagnostics, externalBenchmark }) {
   const commanderName = commander?.displayName || "seu comandante";
   const mainWincon = winconSummary?.primaryWincons?.[0]?.label || "vantagem acumulada";
+  const strategyName = strategy?.primaryArchetype?.label || archetype?.primary || "plano ainda em construcao";
   const rampOdds = findOdds(probabilityAnalysis, "openingRamp");
   const drawOdds = findOdds(probabilityAnalysis, "drawByTurn4");
   const weakPackages = (packages || []).filter((item) => ["weak", "needs_review"].includes(item.status));
   const excessPackages = (packages || []).filter((item) => item.status === "excess");
 
   return {
-    summary: buildSummary({ commanderName, statistics, archetype, weakPackages, score, externalBenchmark }),
+    summary: buildSummary({ commanderName, statistics, archetype, strategy, weakPackages, score, externalBenchmark }),
     commanderUnderstanding: commander
-      ? `${commanderName} pede que a lista transforme o texto do comandante em repeticao de valor, pressao ou fechamento. O analisador leu esse plano como ${archetype?.primary || "plano ainda em construcao"}.`
+      ? `${commanderName} pede que a lista transforme o texto do comandante em repeticao de valor, pressao ou fechamento. O motor estrategico leu esse plano como ${strategyName}.`
       : "Sem comandante selecionado, a leitura fica mais parecida com avaliacao estrutural do que com consultoria de Commander.",
-    planA: `Plano A: desenvolver mana, colocar as pecas que sustentam ${archetype?.primary || "o plano principal"} e converter isso em ${mainWincon.toLowerCase()}.`,
-    planB: buildPlanB({ statistics, winconSummary, cardRoles }),
-    howItWins: buildHowItWins(winconSummary, cardRoles),
+    planA: strategy?.planA || `Plano A: desenvolver mana, colocar as pecas que sustentam ${strategyName} e converter isso em ${mainWincon.toLowerCase()}.`,
+    planB: strategy?.planB || buildPlanB({ statistics, winconSummary, cardRoles }),
+    howItWins: strategy?.winConditions?.length ? strategy.winConditions : buildHowItWins(winconSummary, cardRoles),
     manaBaseReview: buildManaBaseReview(statistics, manaAnalysis),
     curveReview: buildCurveReview(statistics),
     rampReview: buildRampReview(statistics, rampOdds),
@@ -28,20 +29,22 @@ export function buildCorvoReview({ commander, statistics, manaAnalysis, probabil
     cutCandidates: simplifyCards(cardRoles?.cutCandidates || []),
     upgradePriorities: buildUpgradePriorities({ weakPackages, excessPackages, diagnostics }),
     mulliganGuide: buildMulliganGuide({ statistics, rampOdds, commanderName }),
-    matchups: buildMatchups({ statistics, packages, archetype }),
-    testingPlan: buildTestingPlan({ statistics, weakPackages, excessPackages }),
+    matchups: buildMatchups({ statistics, packages, archetype, strategy }),
+    testingPlan: buildTestingPlan({ statistics, weakPackages, excessPackages, strategy }),
     finalVerdict: buildFinalVerdict({ score, weakPackages, statistics })
   };
 }
 
-function buildSummary({ commanderName, statistics, archetype, weakPackages, score, externalBenchmark }) {
+function buildSummary({ commanderName, statistics, archetype, strategy, weakPackages, score, externalBenchmark }) {
   const benchmarkText = externalBenchmark?.status === "available"
     ? " Tambem existe contexto externo para comparar escolhas com bases de decks publicados."
     : "";
+  const plan = strategy?.primaryArchetype?.label || archetype?.primary || "um plano ainda em construcao";
+  const confidence = strategy?.confidenceLevel ? ` Confianca estrategica: ${strategy.confidenceLevel}.` : "";
   const weakText = weakPackages.length
     ? ` O primeiro gargalo esta em ${weakPackages.slice(0, 2).map((item) => item.label.toLowerCase()).join(" e ")}.`
     : " A estrutura nao mostrou um buraco critico imediato.";
-  return `Li ${statistics.totalCardsInDecklist} cartas com ${statistics.recognizedCards} reconhecidas no catalogo local. Com ${commanderName}, o deck parece caminhar para ${archetype?.primary || "um plano ainda em construcao"}. A nota tecnica atual e ${score?.final ?? "-"} com teto ${score?.maxScore ?? "-"}.${weakText}${benchmarkText}`;
+  return `Li ${statistics.totalCardsInDecklist} cartas com ${statistics.recognizedCards} reconhecidas no catalogo local. Com ${commanderName}, o deck parece caminhar para ${plan}. A nota tecnica atual e ${score?.final ?? "-"} com teto ${score?.maxScore ?? "-"}.${confidence}${weakText}${benchmarkText}`;
 }
 
 function buildPlanB({ statistics, winconSummary, cardRoles }) {
@@ -135,15 +138,16 @@ function buildMulliganGuide({ statistics, rampOdds, commanderName }) {
   };
 }
 
-function buildMatchups({ statistics, packages, archetype }) {
+function buildMatchups({ statistics, packages, archetype, strategy }) {
   const strongInteraction = (statistics.functions.interaction || 0) >= 9;
   const weakProtection = (statistics.functions.protection || 0) < 2;
+  const plan = strategy?.primaryArchetype?.label || archetype?.primary;
   const strongPackageNames = (packages || []).filter((item) => item.status === "strong").map((item) => item.label.toLowerCase());
   return {
     goodAgainst: [
       strongInteraction ? "Mesas dependentes de uma ou duas permanentes-chave." : null,
       strongPackageNames.length ? `Mesas onde ${strongPackageNames.slice(0, 2).join(" e ")} conseguem ditar o ritmo.` : null,
-      archetype?.primary ? `Partidas em que o plano de ${archetype.primary} pode se desenvolver sem pressao imediata.` : null
+      plan ? `Partidas em que o plano de ${plan} pode se desenvolver sem pressao imediata.` : null
     ].filter(Boolean),
     badAgainst: [
       weakProtection ? "Mesas com muita remocao pontual no comandante ou motor principal." : null,
@@ -153,13 +157,14 @@ function buildMatchups({ statistics, packages, archetype }) {
   };
 }
 
-function buildTestingPlan({ statistics, weakPackages, excessPackages }) {
+function buildTestingPlan({ statistics, weakPackages, excessPackages, strategy }) {
   return [
     "Jogue tres partidas anotando se perdeu por mana, falta de compra, falta de resposta ou falta de finalizador.",
     `Separe as cartas de custo 5+ (${(statistics.manaCurve?.["5"] || 0) + (statistics.manaCurve?.["6"] || 0) + (statistics.manaCurve?.["7+"] || 0)} slots) e veja quais realmente viraram o jogo.`,
+    strategy?.primaryArchetype?.missing?.[0] ? `Teste especifico do plano: ${strategy.primaryArchetype.missing[0]}` : null,
     weakPackages[0] ? `No proximo teste, foque em ${weakPackages[0].label.toLowerCase()}: ${weakPackages[0].risk}` : "Mantenha a lista por algumas partidas antes de trocar muitos slots.",
     excessPackages[0] ? `Observe se o excesso em ${excessPackages[0].label.toLowerCase()} aparece como carta morta.` : "Troque no maximo 5 cartas por rodada de teste para medir impacto real."
-  ];
+  ].filter(Boolean);
 }
 
 function buildFinalVerdict({ score, weakPackages, statistics }) {

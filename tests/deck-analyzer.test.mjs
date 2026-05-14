@@ -117,6 +117,118 @@ const K_RRIK_TEST_DECK = `
 1 Anel Solar
 `;
 
+const JURI_ARISTOCRATS_TEST_DECK = `
+20 Swamp
+15 Mountain
+1 Blood Artist
+1 Zulaport Cutthroat
+1 Viscera Seer
+1 Carrion Feeder
+1 Goblin Bombardment
+1 Mayhem Devil
+1 Bastion of Remembrance
+1 Reassembling Skeleton
+1 Ophiomancer
+1 Pitiless Plunderer
+1 Village Rites
+1 Deadly Dispute
+1 Skullclamp
+1 Rakdos Signet
+1 Arcane Signet
+1 Sol Ring
+`;
+
+const CONTROL_TEST_DECK = `
+30 Island
+4 Counterspell
+4 Swords to Plowshares
+4 Path to Exile
+4 Wrath of God
+4 Supreme Verdict
+4 Opt
+4 Consider
+2 Teferi, Hero of Dominaria
+`;
+
+const AGGRO_BURN_TEST_DECK = `
+20 Mountain
+4 Monastery Swiftspear
+4 Lightning Bolt
+4 Lightning Strike
+4 Play with Fire
+4 Shock
+4 Kumano Faces Kakkazan
+4 Viashino Pyromancer
+4 Chain Lightning
+4 Skewer the Critics
+`;
+
+const VOLTRON_TEST_DECK = `
+20 Plains
+4 Colossus Hammer
+4 Ethereal Armor
+4 All That Glitters
+4 Swiftfoot Boots
+4 Lightning Greaves
+4 Hyena Umbra
+4 Blackblade Reforged
+4 Open the Armory
+4 Danitha Capashen, Paragon
+`;
+
+const REANIMATOR_TEST_DECK = `
+20 Swamp
+4 Entomb
+4 Reanimate
+4 Animate Dead
+4 Exhume
+4 Buried Alive
+4 Persist
+4 Griselbrand
+4 Archon of Cruelty
+4 Stitcher's Supplier
+4 Unmarked Grave
+`;
+
+const SPELLSLINGER_TEST_DECK = `
+24 Island
+4 Opt
+4 Consider
+4 Counterspell
+4 Brainstorm
+4 Ponder
+4 Archmage Emeritus
+4 Murmuring Mystic
+4 Metallurgic Summonings
+4 Serum Visions
+`;
+
+const MIDRANGE_TEST_DECK = `
+20 Swamp
+20 Forest
+4 Tarmogoyf
+4 Scavenging Ooze
+4 Tireless Tracker
+4 Sheoldred, the Apocalypse
+4 Fatal Push
+4 Go for the Throat
+4 Thoughtseize
+4 Liliana of the Veil
+`;
+
+const GOODSTUFF_TEST_DECK = `
+24 Forest
+4 Cultivate
+4 Harmonize
+4 Beast Within
+4 Abrupt Decay
+4 Eternal Witness
+4 Tireless Tracker
+4 Assassin's Trophy
+4 Maelstrom Pulse
+4 Sol Ring
+`;
+
 test("parse simple Arena deck with mainboard and sideboard", () => {
   const result = parseDeckText(`
     Deck
@@ -318,6 +430,7 @@ test("Lathril nao retorna plano em construcao e mostra resumo tribal de Elfos", 
   assert.equal(result.tribalSummary.primaryTribe, "Elf");
   assert.ok(result.tribalSummary.totalCreatures > 0);
   assert.ok(result.tribalSummary.tribalCreatures > 0);
+  assert.equal(result.strategy.primaryArchetype.label, "Golgari Elfos");
   assert.equal(result.commander.displayName, "Lathril, Blade of the Elves");
   assert.ok(!JSON.stringify(result).includes("O plano principal ainda precisa de mais cartas reconhecidas"));
 });
@@ -333,7 +446,99 @@ test("K'rrik nao retorna plano em construcao e nao duplica nome do comandante", 
   assert.notEqual(result.archetype.primary, "Plano em construção");
   assert.deepEqual(result.commander.colorIdentity, ["B"]);
   assert.equal(result.commander.displayName, "K'rrik, Son of Yawgmoth");
+  assert.ok(result.strategy.secondaryArchetypes.some((item) => /Combo|Big Mana|Vida como recurso|Drain/.test(item.label)));
   assert.ok(!result.commander.displayName.includes("//"));
+});
+
+test("strategy engine reconhece Juri como aristocrats e rejeita combo sem linha", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    commander: { name: "Juri, Master of the Revue", colorIdentity: ["B", "R"] },
+    deckText: JURI_ARISTOCRATS_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.strategy.primaryArchetype.label, "Sacrificio / Aristocrats");
+  assert.notEqual(result.archetype.primary, "Plano em construÃ§Ã£o");
+  assert.ok(!/Human Tribal/i.test(result.strategy.primaryArchetype.label));
+  assert.ok(result.strategy.rejectedArchetypes.some((item) => item.id === "combo"));
+  assert.ok(result.cardRoles.coreCards.some((card) => /Viscera Seer|Goblin Bombardment|Carrion Feeder/.test(card.name)));
+});
+
+test("strategy engine reconhece controle com respostas, wipes e compra", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: CONTROL_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.strategy.primaryArchetype.label, "Controle");
+  assert.ok(result.strategy.primaryArchetype.evidence.some((line) => line.includes("interacoes")));
+  assert.ok(
+    result.strategy.primaryArchetype.missing.some((line) => line.includes("Finalizador")) ||
+      result.strategy.signals.finisher_count > 0 ||
+      result.strategy.signals.large_threat_count >= 2
+  );
+});
+
+test("strategy engine reconhece aggro/burn sem chamar de combo", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: AGGRO_BURN_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.ok(["Aggro", "Burn"].includes(result.strategy.primaryArchetype.label));
+  assert.ok(result.strategy.rejectedArchetypes.some((item) => item.id === "combo"));
+});
+
+test("strategy engine reconhece voltron por auras, equipamentos e protecao", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    commander: { name: "Sram, Senior Edificer", colorIdentity: ["W"] },
+    deckText: VOLTRON_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.strategy.primaryArchetype.label, "Voltron");
+  assert.ok(result.strategy.signals.equipment_aura_count >= 20);
+});
+
+test("strategy engine reconhece reanimator por enablers, reanimacao e alvos grandes", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: REANIMATOR_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.strategy.primaryArchetype.label, "Reanimator");
+  assert.ok(result.strategy.signals.reanimation_count >= 4);
+});
+
+test("strategy engine reconhece spellslinger por densidade de spells e payoffs", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    commander: { name: "Talrand, Sky Summoner", colorIdentity: ["U"] },
+    deckText: SPELLSLINGER_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.strategy.primaryArchetype.label, "Spellslinger");
+  assert.ok(result.strategy.signals.spell_density > 0.45);
+});
+
+test("strategy engine reconhece midrange por ameacas, interacao e valor", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: MIDRANGE_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.strategy.primaryArchetype.label, "Midrange");
+  assert.ok(result.strategy.primaryArchetype.evidence.some((line) => line.includes("ameacas")));
+});
+
+test("strategy engine reconhece goodstuff/value quando ha valor sem sinergia dominante", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: GOODSTUFF_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.strategy.primaryArchetype.label, "Goodstuff / Value");
+  assert.ok(result.strategy.primaryArchetype.missing.some((line) => line.includes("Baixa densidade")));
 });
 
 test("deck com muitas cartas desconhecidas reduz maxScore", async () => {

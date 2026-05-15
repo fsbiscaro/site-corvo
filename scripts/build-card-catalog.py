@@ -12,6 +12,7 @@ from pathlib import Path
 
 COLOR_ORDER = ["W", "U", "B", "R", "G", "C"]
 OUTPUT_ROOT = Path("assets/data/card-catalog")
+BUCKET_PREFIX_LENGTH = 3
 
 
 def main():
@@ -88,7 +89,7 @@ def main():
         "uniqueCards": len(cards_by_oracle),
         "aliasCount": alias_count,
         "bucketCount": len(buckets),
-        "bucketStrategy": "first-two-normalized-characters"
+        "bucketStrategy": f"prefixed-first-{BUCKET_PREFIX_LENGTH}-normalized-characters"
     }
     write_json(output_root / "meta.json", meta)
     print(json.dumps(meta, indent=2, ensure_ascii=False))
@@ -342,7 +343,8 @@ def normalize_card_name(value):
 
 def bucket_key(normalized):
     compact = re.sub(r"[^a-z0-9]+", "", normalized)
-    return (compact[:2] or "_").ljust(2, "_")
+    key = (compact[:BUCKET_PREFIX_LENGTH] or "_").ljust(BUCKET_PREFIX_LENGTH, "_")
+    return f"b_{key}"
 
 
 def write_json(path, data):

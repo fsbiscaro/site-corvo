@@ -14,6 +14,7 @@ import {
 const CATALOG_ROOT = "/assets/data/card-catalog/buckets";
 const BUCKET_CACHE = new Map();
 const MAX_BUCKET_CACHE_SIZE = 18;
+const BUCKET_PREFIX_LENGTH = 3;
 
 export function normalizeCardName(name) {
   return normalizeFallbackName(name);
@@ -21,7 +22,8 @@ export function normalizeCardName(name) {
 
 export function bucketKeyForName(name) {
   const compact = normalizeCardName(name).replace(/[^a-z0-9]+/g, "");
-  return (compact.slice(0, 2) || "_").padEnd(2, "_");
+  const key = (compact.slice(0, BUCKET_PREFIX_LENGTH) || "_").padEnd(BUCKET_PREFIX_LENGTH, "_");
+  return `b_${key}`;
 }
 
 export async function enrichCardsWithCatalog(cards, env, requestUrl) {

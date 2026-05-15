@@ -13,6 +13,7 @@ import {
 
 const CATALOG_ROOT = "/assets/data/card-catalog/buckets";
 const BUCKET_CACHE = new Map();
+const MAX_BUCKET_CACHE_SIZE = 18;
 
 export function normalizeCardName(name) {
   return normalizeFallbackName(name);
@@ -70,12 +71,6 @@ export async function resolveCommanderCard(commander, env, requestUrl) {
 export async function findCatalogCards(names, env, requestUrl) {
   const result = new Map();
   const lookupPlans = new Map((names || []).map((name) => [name, buildNameLookupPlan(name)]));
-  const bucketNames = [...new Set([...lookupPlans.values()].flatMap((plan) => plan.candidates.map((candidate) => bucketKeyForName(candidate.value))))];
-  const buckets = new Map();
-
-  await Promise.all(bucketNames.map(async (key) => {
-    buckets.set(key, await loadCatalogBucket(key, env, requestUrl));
-  }));
 
   for (const name of names || []) {
     const normalized = normalizeCardName(name);
@@ -85,7 +80,8 @@ export async function findCatalogCards(names, env, requestUrl) {
 
     for (const candidate of plan.candidates) {
       const candidateNormalized = normalizeCardName(candidate.value);
-      const bucket = buckets.get(bucketKeyForName(candidate.value));
+      const bucketKey = bucketKeyForName(candidate.value);
+      const bucket = await loadCatalogBucket(bucketKey, env, requestUrl);
       fromCatalog = lookupBucket(bucket, candidateNormalized);
       if (fromCatalog) {
         matchedCandidate = candidate;
@@ -135,15 +131,15 @@ export async function loadCatalogBucket(key, env, requestUrl) {
     const url = new URL(`${CATALOG_ROOT}/${key}.json`, requestUrl);
     const response = await env.ASSETS.fetch(new Request(url.toString()));
     if (!response.ok) {
-      BUCKET_CACHE.set(key, null);
+      rememberCatalogBucket(key, null);
       return null;
     }
     const bucket = await response.json();
-    BUCKET_CACHE.set(key, bucket);
+    rememberCatalogBucket(key, bucket);
     return bucket;
   } catch (error) {
     console.error("Card catalog bucket unavailable", key, String(error?.message || error).slice(0, 120));
-    BUCKET_CACHE.set(key, null);
+    rememberCatalogBucket(key, null);
     return null;
   }
 }
@@ -180,14 +176,32 @@ export function normalizeColors(colors = []) {
 }
 
 function lookupBucket(bucket, normalizedName) {
-  const candidates = [];
   const directIndex = bucket?.aliases?.[normalizedName];
-  if (Number.isInteger(directIndex) && bucket?.cards?.[directIndex]) candidates.push(bucket.cards[directIndex]);
-  for (const card of bucket?.cards || []) {
-    if (matchesCardName(card, normalizedName)) candidates.push(card);
+  if (!Number.isInteger(directIndex) || !bucket?.cards?.[directIndex]) return null;
+  const directCard = bucket.cards[directIndex];
+  const candidates = [directCard];
+
+  if (isLowQualityCatalogMatch(directCard)) {
+    for (const card of bucket.cards || []) {
+      if (card === directCard) continue;
+      if (matchesCardName(card, normalizedName) && !isLowQualityCatalogMatch(card)) {
+        candidates.push(card);
+        break;
+      }
+    }
   }
+
   const best = chooseBestCatalogCandidate(candidates, normalizedName);
   return best ? normalizeCatalogCard(best) : null;
+}
+
+function rememberCatalogBucket(key, bucket) {
+  if (BUCKET_CACHE.has(key)) BUCKET_CACHE.delete(key);
+  while (BUCKET_CACHE.size >= MAX_BUCKET_CACHE_SIZE) {
+    const oldestKey = BUCKET_CACHE.keys().next().value;
+    BUCKET_CACHE.delete(oldestKey);
+  }
+  BUCKET_CACHE.set(key, bucket);
 }
 
 function chooseBestCatalogCandidate(cards, normalizedName) {
@@ -318,6 +332,10 @@ function enrichParsedCard(card, info) {
     databaseStatus: info.needsReview ? "needs_review" : "found",
     resolutionDebug: info.lookup || null
   };
+}
+
+function isLowQualityCatalogMatch(card) {
+  return isPlaceholderMirrorCard(card) || !(card?.cardTypes || []).length || !card?.oracleText && String(card?.typeLine || "").trim() === "Card // Card";
 }
 
 function addCandidate(target, value, method) {

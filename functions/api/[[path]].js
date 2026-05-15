@@ -42,7 +42,17 @@ export async function handleApiRequest(request, env) {
     return json({ error: "Rota nao encontrada." }, { status: 404 });
   } catch (error) {
     console.error(error);
-    return json({ error: "O grimorio tropeçou na propria magia. Tente de novo.", detail: String(error.message || error).slice(0, 180) }, { status: 500 });
+    return json(localizeReportPtBr({
+      status: "error",
+      error: "O grimório tropeçou na própria magia. Tente de novo.",
+      errors: [{
+        code: "API_UNEXPECTED_ERROR",
+        severity: "critical",
+        message: "Não foi possível concluir a análise agora.",
+        evidence: String(error.message || error).slice(0, 180),
+        suggestion: "Tente novamente. Se persistir, use a leitura local ou revise a lista enviada."
+      }]
+    }), { status: 500 });
   }
 }
 
@@ -55,7 +65,7 @@ async function health(env) {
   const payload = {
     ok: true,
     name: "Grimorio do Corvo API",
-    version: "2026-05-13.6",
+    version: "2026-05-15.1",
     dbConfigured: Boolean(env.DB),
     openAiConfigured: Boolean(env.OPENAI_API_KEY),
     adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
@@ -217,23 +227,40 @@ async function analyzeDeck(request, env) {
 
   const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
   if (body.use_ai && report.status !== "error") {
-    const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
-    if (externalBenchmark) attachExternalBenchmark(report, externalBenchmark);
-    const aiResult = await generateAiDeckReading(env, report, { mode: aiMode, decklist, format, commander: body.commander || null });
-    if (aiResult.analysis) {
-      report.aiAnalysis = aiResult.analysis;
-      report.aiText = aiResult.text;
-      report.aiMode = aiMode;
-      report.aiCached = Boolean(aiResult.cached);
-    } else if (aiResult.error) {
-      report.aiError = aiResult.error;
+    try {
+      const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
+      if (externalBenchmark) attachExternalBenchmark(report, externalBenchmark);
+    } catch (error) {
+      report.externalBenchmark = { source: "EDHREC", status: "unavailable", detail: String(error.message || error).slice(0, 120) };
+    }
+
+    try {
+      const aiResult = await generateAiDeckReading(env, report, { mode: aiMode, decklist, format, commander: body.commander || null });
+      if (aiResult.analysis) {
+        report.aiAnalysis = aiResult.analysis;
+        report.aiText = aiResult.text;
+        report.aiMode = aiMode;
+        report.aiCached = Boolean(aiResult.cached);
+      } else if (aiResult.error) {
+        report.aiError = aiResult.error;
+        if (report.status === "complete") report.status = "partial";
+      }
+    } catch (error) {
+      report.aiError = "A análise com IA falhou sem travar o deck; a leitura local continua disponível.";
+      report.aiDebug = String(error.message || error).slice(0, 180);
       if (report.status === "complete") report.status = "partial";
     }
   }
   report.aiEnabled = Boolean(report.aiAnalysis || report.aiText);
   report.aiStatus = buildAiStatus(report, { requested: Boolean(body.use_ai), mode: aiMode, env });
   report.scoring = buildScoringState(report);
-  report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
+  try {
+    report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
+  } catch (error) {
+    report.historySaved = false;
+    report.historyError = String(error.message || error).slice(0, 160);
+    if (report.status === "complete") report.status = "partial";
+  }
   return json(localizeReportPtBr(report), { status: report.status === "error" ? 400 : 200 });
 }
 
@@ -922,7 +949,7 @@ async function generateAiDeckReading(env, report, options = {}) {
 
   const prompt = fixPtBrCopy(buildAiPrompt(report, { mode }));
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), mode === "DEEP_AI" ? 45000 : 25000);
+  const timeout = setTimeout(() => controller.abort(), mode === "DEEP_AI" ? 35000 : 12000);
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {

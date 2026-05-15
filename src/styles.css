@@ -996,6 +996,18 @@ body[data-account-mode="member"] .hero-corvo {
   background: rgba(131, 81, 28, 0.08);
 }
 
+.deck-error-summary {
+  margin-bottom: 10px;
+  border: 1px solid rgba(138, 40, 40, 0.28);
+  background:
+    linear-gradient(135deg, rgba(138, 40, 40, 0.11), rgba(250, 219, 137, 0.11)),
+    rgba(255, 247, 191, 0.24);
+}
+
+.deck-error-summary strong {
+  color: #70410f;
+}
+
 .deck-page-output .deck-stats {
   gap: 8px;
 }

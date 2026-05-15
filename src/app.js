@@ -320,16 +320,17 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ deck_text: decklist, format, commander, use_ai: useAi, ai_mode: aiMode })
     });
-    const report = await response.json();
+    const responseText = await response.text();
+    const report = parseApiResponse(responseText);
     if (response.status === 401) {
       renderDeckLockedOutput();
       openAuthModal();
       return;
     }
-    if (!response.ok && report.status !== "error") throw new Error(report.error || "Não foi possível analisar o deck agora.");
+    if (!response.ok && report.status !== "error") throw new Error(formatApiError(report) || "Não foi possível analisar o deck agora.");
     output.innerHTML = renderDeckApiReport(report);
   } catch (error) {
-    output.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
+    output.innerHTML = renderDeckFatalError(error.message);
   } finally {
     window.clearInterval(loadingTimer);
     if (submitButton) submitButton.disabled = false;
@@ -337,8 +338,33 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
   }
 }
 
+function parseApiResponse(text) {
+  try {
+    return JSON.parse(text || "{}");
+  } catch {
+    return {
+      status: "error",
+      errors: [{
+        message: "A resposta do servidor veio em um formato inesperado.",
+        evidence: String(text || "").slice(0, 180),
+        suggestion: "Tente novamente em alguns instantes."
+      }]
+    };
+  }
+}
+
 function renderDeckApiReport(report) {
   const verdict = report.verdict || {};
+  if (report.status === "error") {
+    return `
+      ${renderDeckErrorSummary(report)}
+      ${renderDeckMessages(report.errors || [], "error")}
+      ${renderDeckMessages(report.warnings || [], "warning")}
+      ${renderTechnicalPanel(report)}
+      ${report.corvoReview ? renderCorvoReview(report.corvoReview, false, report) : ""}
+    `;
+  }
+
   return `
     ${renderDeckMessages(report.errors || [], "error")}
     ${renderDeckMessages(report.warnings || [], "warning")}
@@ -356,6 +382,33 @@ function renderDeckApiReport(report) {
     ${renderAiStatus(report)}
     ${renderTechnicalPanel(report)}
     ${renderCorvoReview(report.aiAnalysis || report.corvoReview, Boolean(report.aiAnalysis), report)}
+  `;
+}
+
+function renderDeckErrorSummary(report) {
+  const firstError = Array.isArray(report.errors) ? report.errors[0] : null;
+  const title = firstError?.code === "COMMANDER_COLOR_IDENTITY_MISMATCH"
+    ? "Comandante incompatível"
+    : "Análise bloqueada";
+  const message = firstError?.message || report.error || "O Corvo encontrou um bloqueio antes de analisar o deck.";
+
+  return `
+    <section class="deck-section deck-error-summary">
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(message)}</p>
+      ${firstError?.evidence ? `<p><strong>Evidência:</strong> ${escapeHtml(firstError.evidence)}</p>` : ""}
+      ${firstError?.suggestion ? `<p><strong>Como resolver:</strong> ${escapeHtml(firstError.suggestion)}</p>` : ""}
+    </section>
+  `;
+}
+
+function renderDeckFatalError(message) {
+  return `
+    <section class="deck-section deck-error-summary">
+      <h3>Não foi possível analisar agora</h3>
+      <p>${escapeHtml(message || "A conexão com o grimório falhou antes da resposta chegar.")}</p>
+      <p>O botão foi liberado. Tente novamente ou rode a leitura local se a IA demorar.</p>
+    </section>
   `;
 }
 
@@ -567,9 +620,25 @@ function renderDeckMessages(items, tone) {
   const className = tone === "error" ? "deck-message is-error" : "deck-message is-warning";
   return `
     <div class="${className}">
-      ${items.map((item) => `<p>${escapeHtml(item.message || item.error || item)}</p>`).join("")}
+      ${items.map((item) => `<p>${escapeHtml(formatApiMessage(item))}</p>`).join("")}
     </div>
   `;
+}
+
+function formatApiMessage(item) {
+  if (!item || typeof item !== "object") return String(item || "");
+  const parts = [];
+  if (item.code) parts.push(`[${item.code}]`);
+  if (item.message || item.error) parts.push(item.message || item.error);
+  if (item.evidence) parts.push(`Evidência: ${item.evidence}`);
+  if (item.suggestion) parts.push(`Como resolver: ${item.suggestion}`);
+  return parts.filter(Boolean).join(" ");
+}
+
+function formatApiError(report) {
+  if (!report || typeof report !== "object") return "";
+  if (Array.isArray(report.errors) && report.errors.length) return formatApiMessage(report.errors[0]);
+  return report.error || report.message || "";
 }
 
 function renderDeckScores(scores) {

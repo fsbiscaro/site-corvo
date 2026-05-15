@@ -36,15 +36,21 @@ export function buildCorvoReview({ commander, statistics, manaAnalysis, probabil
 }
 
 function buildSummary({ commanderName, statistics, archetype, strategy, weakPackages, score, externalBenchmark }) {
+  if (strategy?.primaryArchetype?.id === "aristocrats_sacrifice") {
+    const payoffs = statistics.functions?.payoffs || 0;
+    const outlets = statistics.functions?.sacrificeOutlets || 0;
+    const treasures = (statistics.mana?.treasureOneShot || 0) + (statistics.mana?.treasureRecurring || 0);
+    return `Esse ${commanderName} já tem a espinha dorsal de Rakdos Aristocrats: ${outlets} outlets, payoffs de morte/drain e recursos pequenos para transformar em valor. O ponto de atenção é medir se esse motor realmente mata ou se só estabiliza a mesa. Se o deck fica com mana e tesouros sobrando, eu testaria trocar parte do excesso de valor por mais payoff, proteção ou uma forma limpa de sacrificar o Juri grande no momento certo. Leitura local: ${score?.final ?? "-"}/10, com ${statistics.recognizedCards}/${statistics.totalCardsInDecklist} cartas reconhecidas.`;
+  }
   const benchmarkText = externalBenchmark?.status === "available"
     ? " Tambem existe contexto externo para comparar escolhas com bases de decks publicados."
     : "";
   const plan = strategy?.primaryArchetype?.label || archetype?.primary || "um plano ainda em construcao";
-  const confidence = strategy?.confidenceLevel ? ` Confianca estrategica: ${strategy.confidenceLevel}.` : "";
+  const confidence = strategy?.confidenceLevel ? ` Confiança estratégica: ${confidenceLabel(strategy.confidenceLevel)}.` : "";
   const weakText = weakPackages.length
     ? ` O primeiro gargalo esta em ${weakPackages.slice(0, 2).map((item) => item.label.toLowerCase()).join(" e ")}.`
-    : " A estrutura nao mostrou um buraco critico imediato.";
-  return `Li ${statistics.totalCardsInDecklist} cartas com ${statistics.recognizedCards} reconhecidas no catalogo local. Com ${commanderName}, o deck parece caminhar para ${plan}. A nota tecnica atual e ${score?.final ?? "-"} com teto ${score?.maxScore ?? "-"}.${confidence}${weakText}${benchmarkText}`;
+    : " A estrutura não mostrou um buraco crítico imediato.";
+  return `Li ${statistics.totalCardsInDecklist} cartas com ${statistics.recognizedCards} reconhecidas no catálogo local. Com ${commanderName}, o deck parece caminhar para ${plan}. A nota técnica atual é ${score?.final ?? "-"} com teto ${score?.maxScore ?? "-"}.${confidence}${weakText}${benchmarkText}`;
 }
 
 function buildPlanB({ statistics, winconSummary, cardRoles }) {
@@ -53,12 +59,12 @@ function buildPlanB({ statistics, winconSummary, cardRoles }) {
   const secondary = winconSummary?.primaryWincons?.[1]?.label;
   if (secondary) return `Plano B: quando o eixo principal travar, o deck ainda pode tentar vencer por ${secondary.toLowerCase()}, desde que preserve recursos e escolha bem as trocas.`;
   if (hasInteraction && hasDraw) return "Plano B: jogar mais devagar, trocar recursos com a mesa e ganhar por valor acumulado ate encontrar um finalizador.";
-  return "Plano B: ainda nao esta muito claro. Nos testes, observe se o deck consegue vencer quando o comandante e removido duas vezes.";
+  return "Plano B: ainda não está muito claro. Nos testes, observe se o deck consegue vencer quando o comandante é removido duas vezes.";
 }
 
 function buildHowItWins(winconSummary, cardRoles) {
   const wincons = winconSummary?.primaryWincons || [];
-  if (!wincons.length) return ["A condicao de vitoria ainda nao ficou nitida pelos dados atuais."];
+  if (!wincons.length) return ["A condição de vitória ainda não ficou nítida pelos dados atuais."];
   return wincons.slice(0, 3).map((item) => `${item.label}: ${item.evidence?.join(" ") || "linha detectada pelo conjunto de tags e estatisticas."}`);
 }
 
@@ -78,16 +84,22 @@ function buildCurveReview(statistics) {
 
 function buildRampReview(statistics, rampOdds) {
   const ramp = statistics.mana.permanentRamp || 0;
+  const rocks = statistics.mana.manaRocks || 0;
+  const treasureOneShot = statistics.mana.treasureOneShot || 0;
+  const treasureRecurring = statistics.mana.treasureRecurring || 0;
   const odds = rampOdds ? ` A chance de abrir com ramp esta em ${rampOdds.percentage}%.` : "";
-  if (ramp < 8) return `${ramp} ramp permanente e pouco para Commander na maioria das mesas.${odds} Antes de upgrades chamativos, eu reforcaria desenvolvimento de mana que fica em campo.`;
-  if (ramp > 14) return `${ramp} ramp permanente e bastante. Isso acelera, mas teste se voce nao esta comprando mana demais quando precisava de payoff ou protecao.${odds}`;
-  return `${ramp} ramp permanente esta em faixa saudavel.${odds}`;
+  const treasureText = treasureOneShot || treasureRecurring
+    ? ` Além disso, há ${treasureOneShot} tesouro(s) pontuais e ${treasureRecurring} fonte(s) recorrentes de tesouro; em Aristocrats isso é aceleração temporária e combustível de sacrifício, não o mesmo que ramp que fica em campo.`
+    : "";
+  if (ramp < 8) return `${ramp} ramp permanente (${rocks} mana rocks/rocks equivalentes) é pouco para Commander na maioria das mesas.${odds} Antes de upgrades chamativos, eu reforçaria desenvolvimento de mana que fica em campo.${treasureText}`;
+  if (ramp > 14) return `${ramp} ramp permanente e bastante. Isso acelera, mas teste se você não está comprando mana demais quando precisava de payoff ou proteção.${odds}${treasureText}`;
+  return `${ramp} ramp permanente está em faixa saudável, com ${rocks} mana rocks/rocks equivalentes.${odds}${treasureText}`;
 }
 
 function buildInteractionReview(statistics) {
   const interaction = statistics.functions.interaction || 0;
   if (interaction < 6) return `${interaction} interacoes e pouco; o deck pode depender demais de executar o proprio plano sem conseguir frear a mesa.`;
-  if (interaction > 14) return `${interaction} interacoes e bastante. Isso e bom para mesas fortes, mas revise se muitas respostas nao estao ocupando slots de condicao de vitoria.`;
+  if (interaction > 14) return `${interaction} interações é bastante. Isso é bom para mesas fortes, mas revise se muitas respostas não estão ocupando slots de condição de vitória.`;
   return `${interaction} interacoes parece uma base funcional, desde que estejam divididas entre remocao pontual, wipes e respostas flexiveis.`;
 }
 
@@ -95,7 +107,7 @@ function buildProtectionReview(statistics, diagnostics) {
   const protection = statistics.functions.protection || 0;
   const commanderWarning = diagnostics?.some((item) => item.code === "LOW_COMMANDER_PROTECTION");
   if (commanderWarning || protection < 2) return `${protection} protecoes detectadas. Se o comandante ou uma peca especifica e central, essa e uma das primeiras areas para reforcar.`;
-  return `${protection} protecoes detectadas. O pacote nao parece zerado, mas vale testar se elas aparecem nos turnos em que a mesa tenta remover sua peca-chave.`;
+  return `${protection} proteções detectadas. O pacote não parece zerado, mas vale testar se elas aparecem nos turnos em que a mesa tenta remover sua peça-chave.`;
 }
 
 function buildCardAdvantageReview(statistics, drawOdds) {
@@ -107,7 +119,7 @@ function buildCardAdvantageReview(statistics, drawOdds) {
 }
 
 function buildCommanderDependency(commander, statistics, cardRoles) {
-  if (!commander) return "Sem comandante definido, nao da para medir dependencia de comandante com seguranca.";
+  if (!commander) return "Sem comandante definido, não dá para medir dependência de comandante com segurança.";
   const enablers = cardRoles?.enablers?.length || 0;
   const payoffs = cardRoles?.payoffs?.length || 0;
   if (enablers >= 6 && payoffs >= 4) return "O deck parece ter corpo proprio: existem enablers e payoffs suficientes para jogar mesmo se o comandante atrasar.";
@@ -133,7 +145,7 @@ function buildMulliganGuide({ statistics, rampOdds, commanderName }) {
     mulligan: [
       "Maos com uma cor faltando e sem fixing.",
       "Maos cheias de custo 5+ sem ramp.",
-      rampOdds && rampOdds.percentage < 45 ? "Maos sem desenvolvimento de mana quando o deck ja tem baixa chance de abrir com ramp." : "Maos que so interagem, mas nao desenvolvem plano."
+      rampOdds && rampOdds.percentage < 45 ? "Mãos sem desenvolvimento de mana quando o deck já tem baixa chance de abrir com ramp." : "Mãos que só interagem, mas não desenvolvem plano."
     ].filter(Boolean)
   };
 }
@@ -169,9 +181,9 @@ function buildTestingPlan({ statistics, weakPackages, excessPackages, strategy }
 
 function buildFinalVerdict({ score, weakPackages, statistics }) {
   if (score?.final >= 8 && !weakPackages.length) return "A lista parece bem encaminhada. Agora o ganho esta em ajustes finos, meta local e qualidade dos slots flexiveis.";
-  if (score?.final >= 6) return "A lista e jogavel, mas ainda tem gargalos claros. Eu corrigiria a base tecnica antes de comprar upgrades caros.";
-  if (statistics.unknownRatio > 0.2) return "A leitura ficou limitada por cartas desconhecidas. Primeiro complete o catalogo ou revise os nomes; depois a avaliacao fica muito mais justa.";
-  return "O deck ainda precisa de fundacao: mana, compra, interacao e condicao de vitoria precisam ficar mais claras.";
+  if (score?.final >= 6) return "A lista é jogável, mas ainda tem gargalos claros. Eu corrigiria a base técnica antes de comprar upgrades caros.";
+  if (statistics.unknownRatio > 0.2) return "A leitura ficou limitada por cartas desconhecidas. Primeiro complete o catálogo ou revise os nomes; depois a avaliação fica muito mais justa.";
+  return "O deck ainda precisa de fundação: mana, compra, interação e condição de vitória precisam ficar mais claras.";
 }
 
 function simplifyCards(cards = []) {
@@ -185,4 +197,8 @@ function simplifyCards(cards = []) {
 
 function findOdds(probabilityAnalysis, key) {
   return (probabilityAnalysis?.drawOdds || []).find((item) => item.key === key) || null;
+}
+
+function confidenceLabel(value) {
+  return ({ high: "alta", medium: "média", low: "baixa" })[value] || value || "-";
 }

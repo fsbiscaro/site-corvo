@@ -2,8 +2,8 @@
 const AUTH_GATE_KEY = "grimorio-corvo-auth-gate";
 
 const defaultTopics = [
-  { id: crypto.randomUUID(), title: "Upgrade de precon por ate R$50", series: "Commander barato", status: "pending" },
-  { id: crypto.randomUUID(), title: "Cartas que parecem ruins ate ganharem a mesa", series: "Carta esquecida", status: "pending" },
+  { id: crypto.randomUUID(), title: "Upgrade de precon por até R$50", series: "Commander barato", status: "pending" },
+  { id: crypto.randomUUID(), title: "Cartas que parecem ruins até ganharem a mesa", series: "Carta esquecida", status: "pending" },
   { id: crypto.randomUUID(), title: "Analisar um deck de comandante subestimado", series: "Decks", status: "pending" },
   { id: crypto.randomUUID(), title: "Top 10 remocoes pretas para Commander", series: "Cartas", status: "done" }
 ];
@@ -116,7 +116,7 @@ async function initAuth() {
   try {
     const response = await fetch(`${API_BASE}/auth/me`, { headers: { Accept: "application/json" } });
     const contentType = response.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) throw new Error("API indisponivel");
+    if (!contentType.includes("application/json")) throw new Error("API indisponível");
     const payload = await response.json();
     setAuthState(payload);
   } catch {
@@ -170,7 +170,7 @@ function closeAuthModal({ resetForm = false, force = false } = {}) {
   const modal = document.querySelector("#authModal");
   if (!modal) return;
   if (!force && modal.classList.contains("is-required") && !authState.isAuthenticated) {
-    setAuthFeedback("Entre para acessar o Grimorio.", "error");
+    setAuthFeedback("Entre para acessar o Grimório.", "error");
     document.querySelector("#loginEmail")?.focus();
     return;
   }
@@ -184,7 +184,7 @@ async function login(event) {
   event.preventDefault();
   const feedback = document.querySelector("#authFeedback");
   const button = event.currentTarget.querySelector("button[type='submit']");
-  setAuthFeedback("Abrindo o grimorio...", "ok");
+  setAuthFeedback("Abrindo o grimório...", "ok");
   showSpellLoader();
   if (button) button.disabled = true;
 
@@ -198,7 +198,7 @@ async function login(event) {
       })
     }), LOGIN_ANIMATION_MS);
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Nao foi possivel entrar.");
+    if (!response.ok) throw new Error(payload.error || "Não foi possível entrar.");
     sessionStorage.setItem(AUTH_GATE_KEY, "open");
     setAuthState(payload);
     setAuthFeedback("Entrada liberada.", "ok");
@@ -326,7 +326,7 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
       openAuthModal();
       return;
     }
-    if (!response.ok && report.status !== "error") throw new Error(report.error || "Nao foi possivel analisar o deck agora.");
+    if (!response.ok && report.status !== "error") throw new Error(report.error || "Não foi possível analisar o deck agora.");
     output.innerHTML = renderDeckApiReport(report);
   } catch (error) {
     output.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
@@ -353,6 +353,7 @@ function renderDeckApiReport(report) {
         <p>${escapeHtml(verdict.subtitle || "")}</p>
       </section>
     ` : ""}
+    ${renderAiStatus(report)}
     ${renderTechnicalPanel(report)}
     ${renderCorvoReview(report.aiAnalysis || report.corvoReview, Boolean(report.aiAnalysis), report)}
   `;
@@ -366,14 +367,62 @@ function renderTechnicalPanel(report) {
       ${renderMetricSection("Resumo geral", renderData.summary)}
       ${renderCurvePanel(report)}
       ${renderMetricSection("Estrutura", renderData.structure)}
+      ${renderMetricSection("Mana e aceleração", renderData.mana)}
       ${renderMetricSection("Categorias funcionais", renderData.categories)}
       ${renderMetricSection("Produção de mana", renderData.manaProduction)}
       ${renderMetricSection("Demanda de mana", renderData.manaDemand)}
       ${renderMetricSection("Probabilidade", renderData.probability)}
+      ${renderMetricSection("Cartas pendentes de reconhecimento", renderData.catalogQuality)}
       ${renderPackagePanel(renderData.packages || [])}
       ${renderDeckScores(report.scores || [])}
+      ${renderScoringState(report.scoring)}
     </section>
   `;
+}
+
+function renderAiStatus(report) {
+  if (!report.aiStatus && !report.scoring) return "";
+  const status = report.aiStatus || {};
+  const scoring = report.scoring || {};
+  return `
+    <section class="deck-section ai-status-panel">
+      <h3>Status da análise</h3>
+      <dl class="deck-stats">
+        <dt>IA premium</dt><dd>${escapeHtml(formatPremiumStatus(status.status || "not_requested"))}</dd>
+        <dt>Modo</dt><dd>${escapeHtml(status.mode || "-")}</dd>
+        <dt>Nota técnica local</dt><dd>${escapeHtml(scoring.localTechnicalScore ?? report.score?.final ?? "-")}/10</dd>
+        <dt>Confiança</dt><dd>${escapeHtml(scoring.analysisConfidence || report.strategy?.confidenceLevel || "-")}</dd>
+        <dt>Nota premium</dt><dd>${escapeHtml(scoring.finalPremiumScore ?? "-")}${scoring.finalPremiumScore !== null && scoring.finalPremiumScore !== undefined ? "/10" : ""}</dd>
+      </dl>
+      ${status.message ? `<p>${escapeHtml(status.message)}</p>` : ""}
+      ${scoring.finalPremiumMessage ? `<p>${escapeHtml(scoring.finalPremiumMessage)}</p>` : ""}
+    </section>
+  `;
+}
+
+function renderScoringState(scoring) {
+  if (!scoring) return "";
+  return `
+    <h3>Nota local e premium</h3>
+    <dl class="deck-stats">
+      <dt>Nota técnica local</dt><dd>${escapeHtml(scoring.localTechnicalScore ?? "-")}/10</dd>
+      <dt>Teto técnico local</dt><dd>${escapeHtml(scoring.localTechnicalMaxScore ?? "-")}/10</dd>
+      <dt>Confiança da leitura</dt><dd>${escapeHtml(scoring.analysisConfidence || "-")}</dd>
+      <dt>Status premium</dt><dd>${escapeHtml(formatPremiumStatus(scoring.premiumStatus || "-"))}</dd>
+      <dt>Nota premium final</dt><dd>${escapeHtml(scoring.finalPremiumScore ?? "-")}${scoring.finalPremiumScore !== null && scoring.finalPremiumScore !== undefined ? "/10" : ""}</dd>
+    </dl>
+    ${Array.isArray(scoring.localTechnicalReasons) && scoring.localTechnicalReasons.length ? renderDeckList("Limites da nota técnica", scoring.localTechnicalReasons) : ""}
+  `;
+}
+
+function formatPremiumStatus(status) {
+  return ({
+    complete: "completa",
+    unavailable: "indisponível",
+    not_requested: "não solicitada",
+    partial: "parcial",
+    error: "erro"
+  })[status] || status || "-";
 }
 
 function renderCurvePanel(report) {
@@ -646,14 +695,14 @@ async function renderAdminMembers() {
     return;
   }
 
-  list.innerHTML = '<div class="empty-state compact">Carregando usuarios...</div>';
+  list.innerHTML = '<div class="empty-state compact">Carregando usuários...</div>';
   try {
     const response = await fetch(`${API_BASE}/admin/users`, { headers: { Accept: "application/json" } });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Nao consegui carregar os usuarios.");
+    if (!response.ok) throw new Error(payload.error || "Não consegui carregar os usuários.");
     const members = payload.users || [];
     if (!members.length) {
-      list.innerHTML = '<div class="empty-state compact">Nenhum usuario cadastrado ainda.</div>';
+      list.innerHTML = '<div class="empty-state compact">Nenhum usuário cadastrado ainda.</div>';
       return;
     }
     list.innerHTML = members.map(renderMemberRow).join("");
@@ -691,7 +740,7 @@ async function createMember(event) {
   event.preventDefault();
   const list = document.querySelector("#memberList");
   if (!isAdminUser()) {
-    if (list) list.innerHTML = '<p class="error-text">Somente administradores podem criar usuarios.</p>';
+    if (list) list.innerHTML = '<p class="error-text">Somente administradores podem criar usuários.</p>';
     return;
   }
 
@@ -723,7 +772,7 @@ async function createMember(event) {
       })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Nao consegui criar o usuario.");
+    if (!response.ok) throw new Error(payload.error || "Não consegui criar o usuário.");
     form.reset();
     document.querySelector("#memberRole").value = "member";
     document.querySelector("#memberStatus").value = "active";

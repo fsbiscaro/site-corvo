@@ -1,5 +1,6 @@
 import {
-  classifyAristocratsFunction
+  classifyAristocratsFunction,
+  isDeathOrDrainPayoff
 } from "./function-taxonomy.js";
 
 const ROLE_LIMIT = 14;
@@ -84,7 +85,7 @@ function classifyCardRole({ card, commanderProfile, tribalSummary, winconSummary
     keepCutVerdict = "keep";
     synergyWithCommander = "high";
     reason = "Aparece como uma forma de converter vantagem em vitoria.";
-  } else if (hasAny(tags, ["payoff", "tribal_payoff", "drain", "anthem", "lord"])) {
+  } else if (hasAny(tags, ["payoff", "tribal_payoff", "anthem", "lord"]) || (tags.has("drain") && isDeathOrDrainPayoff(card))) {
     role = "payoff";
     keepCutVerdict = "keep";
     synergyWithCommander = "high";
@@ -243,7 +244,7 @@ function classifyAristocratsRole(card) {
       role: "core",
       keepCutVerdict: "keep",
       synergyWithCommander: "high",
-      reason: `${name} e outlet ${type === "free_sacrifice_outlet" ? "gratuito/recorrente" : "de sacrificio"}: permite transformar fodder em gatilhos de morte, dano ou valor no momento certo.`
+      reason: `${name} é outlet ${type === "free_sacrifice_outlet" ? "gratuito/recorrente" : "de sacrificio"}: permite transformar fodder em gatilhos de morte, dano ou valor no momento certo.`
     };
   }
 
@@ -252,7 +253,7 @@ function classifyAristocratsRole(card) {
       role: "payoff",
       keepCutVerdict: "keep",
       synergyWithCommander: "high",
-      reason: `${name} e payoff central de aristocrats: converte mortes ou sacrificios em drain, dano ou vantagem, ajudando o deck a vencer sem depender de combate.`
+      reason: `${name} é payoff central de aristocrats: converte mortes ou sacrificios em drain, dano ou vantagem, ajudando o deck a vencer sem depender de combate.`
     };
   }
 
@@ -261,7 +262,7 @@ function classifyAristocratsRole(card) {
       role: "engine",
       keepCutVerdict: "keep",
       synergyWithCommander: "high",
-      reason: `${name} e engine do plano: transforma criaturas, mortes ou artefatos em recurso repetido para manter o motor de sacrificio funcionando.`
+      reason: `${name} é engine do plano: transforma criaturas, mortes ou artefatos em recurso repetido para manter o motor de sacrificio funcionando.`
     };
   }
 

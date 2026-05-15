@@ -1,5 +1,5 @@
 import { CARD_TYPE_LABELS, COMMANDER_FORMATS, CREATURE_ROLE_TAGS, FUNCTION_KEYS } from "./types.js";
-import { isDeathOrDrainPayoff, isRealSacrificeOutlet } from "./function-taxonomy.js";
+import { isAristocratsEngine, isDeathOrDrainPayoff, isRealSacrificeOutlet, isTreasureValue, textOfCard } from "./function-taxonomy.js";
 
 export function buildDeckSummary(parsedDeck) {
   return {
@@ -49,6 +49,18 @@ export function buildDeckStatistics({ cards = [], parsedDeck, commander = null, 
   const colorIdentitySet = new Set();
   const functionCounts = Object.fromEntries(Object.keys(FUNCTION_KEYS).map((key) => [key, 0]));
   const legalityIssues = { bannedCards: [], notLegalCards: [], unknownCards: [] };
+  const manaCounters = {
+    manaRocks: 0,
+    landRamp: 0,
+    creatureRamp: 0,
+    treasureOneShot: 0,
+    treasureRecurring: 0,
+    burstMana: 0,
+    costReducers: 0,
+    manaFixing: 0,
+    artifactFodder: 0,
+    sacrificeEngine: 0
+  };
 
   let manaValueTotal = 0;
   let nonLandCards = 0;
@@ -97,6 +109,7 @@ export function buildDeckStatistics({ cards = [], parsedDeck, commander = null, 
     }
 
     countFunctions(card, functionCounts, quantity);
+    countManaDetails(card, manaCounters, quantity);
 
     if (countedCreature && card.tags?.includes("creature_ramp")) creatureStats.manaCreatures += 0;
   }
@@ -107,13 +120,18 @@ export function buildDeckStatistics({ cards = [], parsedDeck, commander = null, 
 
   const mana = {
     lands: typeCounters.lands,
-    permanentRamp: tagCounts.permanent_ramp || 0,
-    creatureRamp: tagCounts.creature_ramp || 0,
-    artifactRamp: tagCounts.artifact_ramp || 0,
-    landRamp: tagCounts.land_ramp || 0,
-    burstMana: tagCounts.burst_mana || 0,
-    costReducers: tagCounts.cost_reducer || 0,
-    manaFixing: tagCounts.mana_fixing || 0,
+    permanentRamp: manaCounters.manaRocks + manaCounters.landRamp + manaCounters.creatureRamp,
+    manaRocks: manaCounters.manaRocks,
+    creatureRamp: manaCounters.creatureRamp,
+    artifactRamp: manaCounters.manaRocks,
+    landRamp: manaCounters.landRamp,
+    treasureOneShot: manaCounters.treasureOneShot,
+    treasureRecurring: manaCounters.treasureRecurring,
+    burstMana: manaCounters.burstMana,
+    costReducers: manaCounters.costReducers,
+    manaFixing: manaCounters.manaFixing,
+    artifactFodder: manaCounters.artifactFodder,
+    sacrificeEngine: manaCounters.sacrificeEngine,
     averageManaValue,
     curve: manaCurve
   };
@@ -182,6 +200,30 @@ function countFunctions(card, functionCounts, quantity) {
   }
 }
 
+function countManaDetails(card, manaCounters, quantity) {
+  const tags = new Set(card.tags || []);
+  const text = textOfCard(card);
+  const isArtifact = card.cardTypes?.includes("Artifact");
+
+  if (tags.has("artifact_ramp") || (tags.has("permanent_ramp") && isArtifact)) manaCounters.manaRocks += quantity;
+  if (tags.has("land_ramp")) manaCounters.landRamp += quantity;
+  if (tags.has("creature_ramp") && !isTreasureValue(card) && !isAristocratsEngine(card)) manaCounters.creatureRamp += quantity;
+  if (tags.has("burst_mana")) manaCounters.burstMana += quantity;
+  if (tags.has("cost_reducer")) manaCounters.costReducers += quantity;
+  if (tags.has("mana_fixing")) manaCounters.manaFixing += quantity;
+
+  if (isTreasureValue(card) || /treasure token/i.test(text)) {
+    if (/whenever|at the beginning|each end step|create .* for each|whenever you sacrifice|whenever .* dies/i.test(text) || isAristocratsEngine(card)) {
+      manaCounters.treasureRecurring += quantity;
+    } else {
+      manaCounters.treasureOneShot += quantity;
+    }
+    manaCounters.artifactFodder += quantity;
+  }
+
+  if (isAristocratsEngine(card) || isRealSacrificeOutlet(card)) manaCounters.sacrificeEngine += quantity;
+}
+
 function countCurveByType(target, card, bucket, quantity) {
   for (const type of card.cardTypes || []) {
     if (!target[type]) target[type] = emptyCurve();
@@ -204,10 +246,17 @@ function emptyCurve() {
 
 function buildCategories({ functionCounts, mana, tagCounts }) {
   return {
-    ramp: (mana.permanentRamp || 0) + (mana.creatureRamp || 0) + (mana.landRamp || 0) + (mana.burstMana || 0),
+    ramp: (mana.permanentRamp || 0) + (mana.burstMana || 0),
     permanentRamp: mana.permanentRamp || 0,
+    manaRocks: mana.manaRocks || 0,
+    landRamp: mana.landRamp || 0,
+    creatureRamp: mana.creatureRamp || 0,
+    treasureOneShot: mana.treasureOneShot || 0,
+    treasureRecurring: mana.treasureRecurring || 0,
     burstMana: mana.burstMana || 0,
     costReducers: mana.costReducers || 0,
+    artifactFodder: mana.artifactFodder || 0,
+    sacrificeEngine: mana.sacrificeEngine || 0,
     draw: functionCounts.cardDraw || 0,
     selection: functionCounts.cardSelection || 0,
     removal: functionCounts.removal || 0,

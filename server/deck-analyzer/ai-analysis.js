@@ -1,3 +1,5 @@
+import { localizeReportPtBr } from "./i18n/pt-BR.js";
+
 export const AI_MODES = {
   STANDARD: "STANDARD_AI",
   DEEP: "DEEP_AI"
@@ -223,5 +225,5 @@ function normalizeAiAnalysis(analysis, maxScore) {
     analysis.score.value = maxScore;
     analysis.score.explanation = `${analysis.score.explanation || ""} Nota limitada pelo teto técnico calculado pelo backend.`.trim();
   }
-  return analysis;
+  return localizeReportPtBr(analysis);
 }

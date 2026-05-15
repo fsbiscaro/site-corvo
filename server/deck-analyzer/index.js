@@ -20,6 +20,7 @@ export { analyzeCardRoles } from "./card-role-analyzer.js";
 export { buildCorvoStrategy, scoreArchetypes, strategyToLegacyArchetype } from "./corvo-strategy-engine.js";
 export { buildCorvoReview } from "./corvo-review-engine.js";
 export { fetchExternalCommanderBenchmark } from "./external-benchmark.js";
+export { fixPtBrCopy, localizeReportPtBr } from "./i18n/pt-BR.js";
 export { buildDeckScore, buildScoreCards } from "./score.js";
 export { buildTribalSummary } from "./tribal-analyzer.js";
 export { COMMANDER_FORMATS } from "./types.js";

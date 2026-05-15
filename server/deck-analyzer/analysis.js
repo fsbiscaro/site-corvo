@@ -30,7 +30,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   const commanderProfile = findCommanderProfile(selectedCommander);
   const tribalSummary = buildTribalSummary({ cards: enrichedDeck, commanderProfile });
   const validation = validateFormatRules({ format: normalizedFormat, commander: selectedCommander, statistics, cards: enrichedDeck, parsedDeck: parsed });
-  const winconSummary = detectWincons({ statistics, tribalSummary, commanderProfile, commander: selectedCommander });
+  let winconSummary = detectWincons({ statistics, tribalSummary, commanderProfile, commander: selectedCommander });
   const strategySignals = detectStrategySignals({ cards: enrichedDeck, commander: selectedCommander, commanderProfile, tribalSummary, statistics, winconSummary });
   const strategy = buildCorvoStrategy({
     signals: strategySignals.signals,
@@ -42,6 +42,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     winconSummary,
     cards: enrichedDeck
   });
+  winconSummary = mergeStrategyWincons(winconSummary, strategy);
   const legacyArchetype = detectArchetype({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, tagCounts: statistics.tagCounts, enrichedDeck, winconSummary });
   const archetype = strategyToLegacyArchetype(strategy, legacyArchetype);
   const diagnostics = buildDiagnostics({ format: normalizedFormat, commander: selectedCommander, commanderProfile, statistics, validation, tribalSummary, winconSummary, archetype });
@@ -50,11 +51,11 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   const manaAnalysis = buildManaAnalysis({ cards: enrichedDeck, commander: selectedCommander, statistics });
   const probabilityAnalysis = buildProbabilityAnalysis({ statistics });
   const cardRoles = analyzeCardRoles({ cards: enrichedDeck, commander: selectedCommander, commanderProfile, tribalSummary, winconSummary, archetype, strategy, strategySignals });
-  const packages = buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnalysis, cardRoles, commanderProfile, tribalSummary, winconSummary });
-  const catalogQuality = buildCatalogQuality(statistics);
+  const packages = buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnalysis, cardRoles, commanderProfile, tribalSummary, winconSummary, strategy });
+  const catalogQuality = buildCatalogQuality(statistics, enrichedDeck);
   const corvoReview = buildCorvoReview({ commander: selectedCommander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, strategy, tribalSummary, score, diagnostics, externalBenchmark: null });
   const scores = buildScoreCards(score, statistics);
-  const renderData = buildRendererData({ commander: selectedCommander, statistics, tribalSummary, score, archetype, winconSummary, manaAnalysis, probabilityAnalysis, packages, cardRoles });
+  const renderData = buildRendererData({ commander: selectedCommander, statistics, tribalSummary, score, archetype, winconSummary, strategy, manaAnalysis, probabilityAnalysis, packages, cardRoles, catalogQuality });
 
   if (validation.blockingErrors.length) {
     return {
@@ -345,43 +346,81 @@ function compactCardForTechnicalJson(card) {
   };
 }
 
-function buildCatalogQuality(statistics) {
+function mergeStrategyWincons(winconSummary, strategy) {
+  const current = Array.isArray(winconSummary?.primaryWincons) ? [...winconSummary.primaryWincons] : [];
+  const labels = new Set(current.map((item) => item.label));
+  for (const label of strategy?.winConditions || []) {
+    if (!label || labels.has(label)) continue;
+    current.push({
+      label,
+      confidence: strategy?.confidenceLevel || "medium",
+      evidence: strategy?.primaryArchetype?.evidence?.slice?.(0, 2) || ["Linha detectada pelo motor estratégico."]
+    });
+    labels.add(label);
+  }
+  return {
+    ...(winconSummary || {}),
+    primaryWincons: current,
+    missingWinconWarning: current.length ? false : Boolean(winconSummary?.missingWinconWarning)
+  };
+}
+
+function buildCatalogQuality(statistics, cards = []) {
+  const unknownCards = (cards || []).filter((card) => card.databaseStatus === "unknown");
   return {
     recognized: statistics.recognizedCards,
     total: statistics.totalCardsInDecklist,
     unrecognized: statistics.unknownCards,
     recognitionRatio: Number((statistics.recognitionRatio || 0).toFixed(4)),
     unrecognizedCards: statistics.unknownCardNames || [],
-    unrecognizedDetails: buildUnrecognizedDetails(statistics),
-    catalogUpdateSuggestions: buildCatalogUpdateSuggestions(statistics)
+    unrecognizedDetails: buildUnrecognizedDetails(statistics, unknownCards),
+    catalogUpdateSuggestions: buildCatalogUpdateSuggestions(statistics, unknownCards)
   };
 }
 
-function buildUnrecognizedDetails(statistics) {
-  return (statistics.unknownCardNames || []).map((name) => ({
-    inputName: name,
-    reason: "Nao houve match exato em nome canonico, nomes impressos traduzidos ou fallback local.",
-    checks: {
-      accentInsensitiveName: true,
-      englishCanonicalName: true,
-      printedNamesAliases: true,
-      parentheticalName: true,
-      splitCardFaces: true
-    }
-  }));
+function buildUnrecognizedDetails(statistics, unknownCards = []) {
+  const byName = new Map(unknownCards.map((card) => [String(card.inputName || card.name || "").trim(), card]));
+  return (statistics.unknownCardNames || []).map((name) => {
+    const card = byName.get(name) || {};
+    const debug = card.resolutionDebug || {};
+    const attempts = Array.isArray(debug.attempts) ? debug.attempts : [];
+    return {
+      inputName: name,
+      normalizedName: normalizeCardName(name),
+      reason: debug.reason || "Nao houve match exato em nome canonico, nomes impressos traduzidos ou fallback local.",
+      attempts,
+      suggestions: buildAliasSuggestions(name, attempts),
+      checks: {
+        accentInsensitiveName: true,
+        englishCanonicalName: true,
+        printedNamesAliases: true,
+        parentheticalName: true,
+        splitCardFaces: true
+      }
+    };
+  });
 }
 
-function buildCatalogUpdateSuggestions(statistics) {
+function buildCatalogUpdateSuggestions(statistics, unknownCards = []) {
+  const byName = new Map(unknownCards.map((card) => [String(card.inputName || card.name || "").trim(), card]));
   return (statistics.unknownCardNames || []).map((name) => ({
     inputName: name,
-    normalizedName: String(name || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .trim(),
+    normalizedName: normalizeCardName(name),
+    attempts: byName.get(name)?.resolutionDebug?.attempts || [],
+    suggestions: buildAliasSuggestions(name, byName.get(name)?.resolutionDebug?.attempts || []),
     action: "review_alias_or_add_card",
     needsReview: true
   }));
+}
+
+function buildAliasSuggestions(name, attempts = []) {
+  const clean = String(name || "").trim();
+  const fromAttempts = attempts
+    .map((item) => item?.value || item?.name || item)
+    .filter(Boolean)
+    .map((item) => String(item).trim())
+    .filter((item) => item && normalizeCardName(item) !== normalizeCardName(clean));
+  return [...new Set(fromAttempts)].slice(0, 6);
 }
 
 function mergeCards(cards) {

@@ -9,10 +9,7 @@ const DEFAULT_ODDS = [
 export function buildProbabilityAnalysis({ statistics }) {
   const deckSize = Math.max(1, Number(statistics?.totalCardsInDecklist || 0));
   const categoryCounts = {
-    ramp: Math.max(
-      statistics?.mana?.permanentRamp || 0,
-      (statistics?.mana?.permanentRamp || 0) + (statistics?.mana?.creatureRamp || 0) + (statistics?.mana?.landRamp || 0)
-    ),
+    ramp: statistics?.mana?.permanentRamp || 0,
     cardDraw: (statistics?.functions?.cardDraw || 0) + (statistics?.functions?.cardSelection || 0),
     interaction: statistics?.functions?.interaction || 0,
     protection: statistics?.functions?.protection || 0,

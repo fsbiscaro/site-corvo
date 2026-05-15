@@ -1,4 +1,4 @@
-export function buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnalysis, cardRoles, commanderProfile, tribalSummary, winconSummary }) {
+export function buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnalysis, cardRoles, commanderProfile, tribalSummary, winconSummary, strategy }) {
   const packages = [
     manaDevelopmentPackage(statistics, manaAnalysis),
     simplePackage({
@@ -26,7 +26,7 @@ export function buildPackageAnalysis({ statistics, manaAnalysis, probabilityAnal
       excessText: "Interacao demais pode diluir o plano se as respostas forem muito condicionais."
     }),
     protectionPackage(statistics, commanderProfile),
-    winConditionPackage(winconSummary, statistics),
+    winConditionPackage(winconSummary, statistics, strategy),
     synergyPackage(commanderProfile, tribalSummary, statistics),
     optionalPackage("sacrifice", "Sacrificio", statistics.functions.sacrificeOutlets || 0, statistics.tagCounts.sacrifice || 0),
     optionalPackage("graveyard", "Cemiterio", statistics.functions.recursion || 0, statistics.tagCounts.graveyard_synergy || 0),
@@ -69,7 +69,7 @@ function protectionPackage(statistics, commanderProfile) {
 }
 
 function manaDevelopmentPackage(statistics, manaAnalysis) {
-  const ramp = (statistics.mana.permanentRamp || 0) + (statistics.mana.creatureRamp || 0) + (statistics.mana.landRamp || 0);
+  const ramp = statistics.mana.permanentRamp || 0;
   const lands = statistics.types.lands || 0;
   let status = "ok";
   if (lands < 34 || ramp < 7) status = "weak";
@@ -93,16 +93,19 @@ function manaDevelopmentPackage(statistics, manaAnalysis) {
   };
 }
 
-function winConditionPackage(winconSummary, statistics) {
-  const count = (winconSummary?.primaryWincons || []).length;
-  const status = winconSummary?.missingWinconWarning ? "weak" : count >= 2 ? "strong" : "ok";
+function winConditionPackage(winconSummary, statistics, strategy) {
+  const summaryLabels = (winconSummary?.primaryWincons || []).map((item) => item.label);
+  const strategyLabels = Array.isArray(strategy?.winConditions) ? strategy.winConditions : [];
+  const labels = [...new Set([...summaryLabels, ...strategyLabels].filter(Boolean))];
+  const count = labels.length;
+  const status = count >= 3 ? "strong" : count >= 1 ? "ok" : "weak";
   return {
     id: "win_conditions",
     label: "Condicoes de vitoria",
     count,
     status,
     interpretation: count
-      ? `Linhas principais: ${winconSummary.primaryWincons.map((item) => item.label).join(", ")}.`
+      ? `Linhas principais: ${labels.join(", ")}.`
       : "Nenhuma linha de finalizacao ficou clara pelos dados atuais.",
     risk: status === "weak" ? "O deck pode estabilizar a mesa e ainda assim demorar para ganhar." : "As linhas de vitoria existem; agora vale medir consistencia.",
     action: status === "weak" ? "Escolha um plano de fechamento e aumente a densidade de cartas que convertem vantagem em vitoria." : "Teste se essas linhas aparecem em partidas reais."

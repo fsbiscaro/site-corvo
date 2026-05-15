@@ -1,4 +1,7 @@
-export function buildRendererData({ commander, statistics, tribalSummary, score, archetype, winconSummary, manaAnalysis, probabilityAnalysis, packages, cardRoles }) {
+export function buildRendererData({ commander, statistics, tribalSummary, score, archetype, winconSummary, strategy, manaAnalysis, probabilityAnalysis, packages, cardRoles, catalogQuality }) {
+  const strategyWincons = Array.isArray(strategy?.winConditions) ? strategy.winConditions : [];
+  const summaryWincons = (winconSummary?.primaryWincons || []).map((item) => item.label);
+  const wincons = [...new Set([...summaryWincons, ...strategyWincons])];
   return {
     commander: commander ? {
       displayName: commander.displayName,
@@ -29,11 +32,15 @@ export function buildRendererData({ commander, statistics, tribalSummary, score,
     mana: [
       { label: "Terrenos", value: statistics.mana.lands },
       { label: "Ramp permanente", value: statistics.mana.permanentRamp },
+      { label: "Mana rocks", value: statistics.mana.manaRocks },
       { label: "Criaturas de mana", value: statistics.mana.creatureRamp },
-      { label: "Ramp de artefato", value: statistics.mana.artifactRamp },
       { label: "Ramp de terreno", value: statistics.mana.landRamp },
+      { label: "Tesouros pontuais", value: statistics.mana.treasureOneShot },
+      { label: "Tesouros recorrentes", value: statistics.mana.treasureRecurring },
       { label: "Mana explosiva", value: statistics.mana.burstMana },
       { label: "Redutores", value: statistics.mana.costReducers },
+      { label: "Fodder de artefato", value: statistics.mana.artifactFodder },
+      { label: "Engines de sacrifício", value: statistics.mana.sacrificeEngine },
       { label: "Fixing", value: statistics.mana.manaFixing }
     ],
     functions: [
@@ -84,11 +91,15 @@ export function buildRendererData({ commander, statistics, tribalSummary, score,
       { label: "Payoffs/finalizadores", value: tribalSummary.tribalPayoffs + tribalSummary.tribalFinishers },
       { label: "Ramp tribal", value: tribalSummary.tribalRampPieces }
     ] : [],
+    catalogQuality: (catalogQuality?.unrecognizedDetails || []).map((item) => ({
+      label: item.inputName,
+      value: item.suggestions?.length ? `Sugestões: ${item.suggestions.join(", ")}` : item.reason
+    })),
     verdict: {
       score: score.final,
       maxScore: score.maxScore,
       archetype: archetype.primary,
-      wincons: (winconSummary.primaryWincons || []).map((item) => item.label)
+      wincons
     }
   };
 }
@@ -108,8 +119,15 @@ function categoryLabel(key) {
   return ({
     ramp: "Ramp total",
     permanentRamp: "Ramp permanente",
+    manaRocks: "Mana rocks",
+    landRamp: "Ramp de terreno",
+    creatureRamp: "Criaturas de mana",
+    treasureOneShot: "Tesouros pontuais",
+    treasureRecurring: "Tesouros recorrentes",
     burstMana: "Mana explosiva",
     costReducers: "Redutores",
+    artifactFodder: "Fodder de artefato",
+    sacrificeEngine: "Engine de sacrifício",
     draw: "Compra",
     selection: "Selecao",
     removal: "Remocao",

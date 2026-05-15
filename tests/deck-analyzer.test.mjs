@@ -512,8 +512,14 @@ test("aristocrats separa outlet, payoff, engine, recursao, tesouro e ramp", asyn
   assert.equal(byName.get("Pitiless Plunderer")?.role, "engine");
   assert.equal(byName.get("Victimize")?.role, "support");
   assert.equal(byName.get("Wayfarer's Bauble")?.role, "ramp");
+  assert.equal(byName.get("Feed the Swarm")?.role, "interaction");
   assert.notEqual(byName.get("Wayfarer's Bauble")?.reason, byName.get("Goblin Bombardment")?.reason);
   assert.ok(!result.strategy.winConditions.some((label) => /combo/i.test(label)));
+  assert.ok(result.strategy.winConditions.length > 0);
+  assert.ok(result.packages.find((item) => item.id === "win_conditions")?.count > 0);
+  assert.equal(result.statistics.mana.creatureRamp, 0);
+  assert.ok(result.statistics.mana.treasureOneShot + result.statistics.mana.treasureRecurring > 0);
+  assert.equal(result.probabilityAnalysis.categoryCounts.ramp, result.statistics.mana.permanentRamp);
   assert.equal(result.packages.find((item) => item.id === "protection")?.count, 2);
   assert.notEqual(result.packages.find((item) => item.id === "protection")?.status, "strong");
 });

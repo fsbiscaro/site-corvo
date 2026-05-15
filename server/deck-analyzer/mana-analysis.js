@@ -81,12 +81,16 @@ export function buildManaAnalysis({ cards = [], commander = null, statistics = {
       tappedLands,
       utilityLands,
       fixing: statistics?.mana?.manaFixing || 0,
-      rocks,
-      manaCreatures,
-      landRamp,
-      treasures,
+      rocks: statistics?.mana?.manaRocks ?? rocks,
+      manaCreatures: statistics?.mana?.creatureRamp ?? manaCreatures,
+      landRamp: statistics?.mana?.landRamp ?? landRamp,
+      treasureOneShot: statistics?.mana?.treasureOneShot || 0,
+      treasureRecurring: statistics?.mana?.treasureRecurring || 0,
+      treasures: (statistics?.mana?.treasureOneShot || 0) + (statistics?.mana?.treasureRecurring || 0),
       burstMana: statistics?.mana?.burstMana || 0,
-      costReducers: statistics?.mana?.costReducers || 0
+      costReducers: statistics?.mana?.costReducers || 0,
+      artifactFodder: statistics?.mana?.artifactFodder || 0,
+      sacrificeEngine: statistics?.mana?.sacrificeEngine || 0
     },
     interpretation: buildManaInterpretation({ activeColors, demand, production, statistics, tappedLands, utilityLands })
   };

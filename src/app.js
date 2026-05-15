@@ -327,7 +327,10 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
       openAuthModal();
       return;
     }
-    if (!response.ok && report.status !== "error") throw new Error(formatApiError(report) || "Não foi possível analisar o deck agora.");
+    if (!response.ok) {
+      output.innerHTML = renderDeckApiReport(normalizeFailedApiReport(report, response.status, responseText));
+      return;
+    }
     output.innerHTML = renderDeckApiReport(report);
   } catch (error) {
     output.innerHTML = renderDeckFatalError(error.message);
@@ -336,6 +339,24 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
     if (submitButton) submitButton.disabled = false;
     updateDeckAnalyzeButton();
   }
+}
+
+function normalizeFailedApiReport(report, status, responseText) {
+  const normalized = report && typeof report === "object" ? { ...report } : {};
+  const existingErrors = Array.isArray(normalized.errors) ? normalized.errors : [];
+  const message = formatApiError(normalized) || normalized.error || normalized.message || "A API recusou a análise antes de devolver um relatório completo.";
+
+  return {
+    ...normalized,
+    status: "error",
+    errors: existingErrors.length ? existingErrors : [{
+      code: `HTTP_${status}`,
+      severity: "critical",
+      message,
+      evidence: normalized.detail || String(responseText || "").slice(0, 220) || `Resposta HTTP ${status}.`,
+      suggestion: "Tente novamente. Se repetir, essa mensagem agora mostra o ponto exato para corrigirmos."
+    }]
+  };
 }
 
 function parseApiResponse(text) {

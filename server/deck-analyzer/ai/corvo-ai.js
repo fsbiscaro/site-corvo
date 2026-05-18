@@ -42,7 +42,7 @@ export async function runCorvoAiAnalysis(report, env, options = {}) {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    return fallbackToLocalReview(`OpenAI respondeu HTTP ${response.status}. ${detail.slice(0, 160)}`);
+    return fallbackToLocalReview(buildOpenAiErrorMessage(response.status, detail));
   }
 
   const data = await response.json();
@@ -79,4 +79,15 @@ function extractOpenAiText(data) {
     }
   }
   return pieces.join("\n\n");
+}
+
+function buildOpenAiErrorMessage(status, detail = "") {
+  if (status === 401 || status === 403) {
+    return "A OpenAI recusou a chave configurada. Verifique se OPENAI_API_KEY está correta no Cloudflare.";
+  }
+  if (status === 429) {
+    return "A OpenAI recusou a análise por limite de cota ou cobrança da conta. A leitura técnica local foi mantida.";
+  }
+  const cleanDetail = String(detail || "").replace(/\s+/g, " ").slice(0, 160);
+  return `A OpenAI respondeu HTTP ${status}.${cleanDetail ? ` Detalhe: ${cleanDetail}` : ""}`;
 }

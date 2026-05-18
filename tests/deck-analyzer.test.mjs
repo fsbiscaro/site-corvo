@@ -691,6 +691,16 @@ test("IA do Corvo retorna erro claro sem chave", async () => {
   assert.match(result.error, /OPENAI_API_KEY/);
 });
 
+test("IA do Corvo traduz erro de cota da OpenAI", async () => {
+  const result = await runCorvoAiAnalysis({ scoreLimits: { maxScore: 7 } }, { OPENAI_API_KEY: "test-key" }, {
+    mode: "standard",
+    fetchFn: async () => new Response(JSON.stringify({ error: { message: "quota exceeded" } }), { status: 429 })
+  });
+
+  assert.equal(result.analysis, null);
+  assert.match(result.error, /limite de cota/);
+});
+
 test("razoes de roles nao confundem remocao e protecao com roubo", async () => {
   const result = await analyzeDeckRequest({
     format: "casual",

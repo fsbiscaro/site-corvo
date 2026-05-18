@@ -19,6 +19,7 @@ import { buildTribalSummary } from "./tribal-analyzer.js";
 import { detectWincons } from "./wincon-detector.js";
 
 export async function analyzeDeckRequest({ deckText, format = "casual", commander = null }, context = {}) {
+  const includeTechnicalJson = Boolean(context.includeTechnicalJson);
   const normalizedFormat = normalizeFormat(format);
   const parsed = parseDeckText(deckText);
   const rawDeckCards = [...parsed.mainboard];
@@ -138,7 +139,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     playtest: buildPlaytestPlan({ statistics, winconSummary }),
     corvoNote: buildCorvoNote({ commander: selectedCommander, commanderProfile, statistics, archetype, tribalSummary }),
     renderData,
-    technicalJson: buildTechnicalJson({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, winconSummary, strategy, strategySignals, diagnostics, archetype, score, scoreLimits, format: normalizedFormat, deck: enrichedDeck, manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark: null }),
+    technicalJson: includeTechnicalJson ? buildTechnicalJson({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, winconSummary, strategy, strategySignals, diagnostics, archetype, score, scoreLimits, format: normalizedFormat, deck: enrichedDeck, manaAnalysis, probabilityAnalysis, cardRoles, packages, catalogQuality, corvoReview, externalBenchmark: null }) : null,
     aiAnalysis: null,
     aiText: ""
   };

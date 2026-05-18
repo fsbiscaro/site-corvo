@@ -223,10 +223,18 @@ async function analyzeDeck(request, env) {
     deckText: decklist,
     format,
     commander: body.commander || null
-  }, { env, requestUrl: request.url });
+  }, { env, requestUrl: request.url, includeTechnicalJson: false });
 
   const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
-  if (body.use_ai && report.status !== "error") {
+  const aiRequested = Boolean(body.use_ai);
+  const runInlineAi = aiRequested && Boolean(body.inline_ai || body.inlineAi);
+  if (aiRequested && !runInlineAi && report.status !== "error") {
+    report.aiDeferred = true;
+    report.aiError = "A leitura técnica foi entregue primeiro para não travar o Worker. A análise premium do Corvo vai rodar em uma etapa separada.";
+    if (report.status === "complete") report.status = "partial";
+  }
+
+  if (runInlineAi && report.status !== "error") {
     try {
       const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
       if (externalBenchmark) attachExternalBenchmark(report, externalBenchmark);
@@ -252,16 +260,17 @@ async function analyzeDeck(request, env) {
     }
   }
   report.aiEnabled = Boolean(report.aiAnalysis || report.aiText);
-  report.aiStatus = buildAiStatus(report, { requested: Boolean(body.use_ai), mode: aiMode, env });
+  report.aiStatus = buildAiStatus(report, { requested: aiRequested, mode: aiMode, env });
   report.scoring = buildScoringState(report);
+  const responseReport = compactDeckReportForResponse(report);
   try {
-    report.historySaved = await saveDeckAnalysis(env, user.id, decklist, report);
+    responseReport.historySaved = await saveDeckAnalysis(env, user.id, decklist, responseReport);
   } catch (error) {
-    report.historySaved = false;
-    report.historyError = String(error.message || error).slice(0, 160);
-    if (report.status === "complete") report.status = "partial";
+    responseReport.historySaved = false;
+    responseReport.historyError = String(error.message || error).slice(0, 160);
+    if (responseReport.status === "complete") responseReport.status = "partial";
   }
-  return json(localizeReportPtBr(report), { status: report.status === "error" ? 400 : 200 });
+  return json(localizeReportPtBr(responseReport), { status: responseReport.status === "error" ? 400 : 200 });
 }
 
 async function parseDeckAnalyzer(request) {
@@ -297,6 +306,18 @@ function buildAiStatus(report, { requested, mode, env }) {
     };
   }
 
+  if (report.aiDeferred) {
+    return {
+      requested: true,
+      status: "deferred",
+      provider: "openai",
+      model: env.OPENAI_MODEL || "gpt-4.1-mini",
+      mode,
+      cached: false,
+      message: report.aiError || "A análise premium foi adiada para preservar a resposta técnica."
+    };
+  }
+
   return {
     requested: true,
     status: "unavailable",
@@ -323,6 +344,134 @@ function buildScoringState(report) {
     finalPremiumMessage: premiumAvailable
       ? "Nota final premium gerada pela IA do Corvo dentro do teto técnico."
       : "Nota final premium indisponível nesta leitura; use a nota técnica local como referência parcial."
+  };
+}
+
+function compactDeckReportForResponse(report) {
+  if (!report || typeof report !== "object") return report;
+  const compact = {
+    ...report,
+    technicalJson: undefined,
+    deck: compactDeckForResponse(report.deck),
+    statistics: compactStatisticsForResponse(report.statistics),
+    strategySignals: report.strategySignals ? { signals: report.strategySignals.signals || {} } : report.strategySignals,
+    cardRoles: compactCardRolesForResponse(report.cardRoles),
+    packages: compactPackagesForResponse(report.packages),
+    commanderProfile: compactCommanderProfile(report.commanderProfile)
+  };
+  delete compact.technicalJson;
+  delete compact.aiDebug;
+  return compact;
+}
+
+function compactDeckForResponse(deck) {
+  if (!deck) return deck;
+  return {
+    mainboard: (deck.mainboard || []).map(compactResolvedCard),
+    sideboard: deck.sideboard || [],
+    commanderSection: deck.commanderSection || []
+  };
+}
+
+function compactResolvedCard(card) {
+  if (!card) return card;
+  return {
+    quantity: card.quantity,
+    inputName: card.inputName,
+    canonicalName: card.canonicalName,
+    displayName: card.displayName,
+    printedName: card.printedName,
+    manaValue: card.manaValue,
+    typeLine: card.typeLine,
+    colors: card.colors || [],
+    colorIdentity: card.colorIdentity || [],
+    tags: card.tags || [],
+    role: card.role,
+    databaseStatus: card.databaseStatus,
+    imageUrl: card.imageUrl || null,
+    thumbnailUrl: card.thumbnailUrl || null
+  };
+}
+
+function compactStatisticsForResponse(statistics) {
+  if (!statistics) return statistics;
+  return {
+    totalCardsInDecklist: statistics.totalCardsInDecklist,
+    totalWithCommander: statistics.totalWithCommander,
+    recognizedCards: statistics.recognizedCards,
+    unknownCards: statistics.unknownCards,
+    averageManaValue: statistics.averageManaValue,
+    totalManaValue: statistics.totalManaValue,
+    colorIdentity: statistics.colorIdentity,
+    colors: statistics.colors,
+    types: statistics.types,
+    mana: statistics.mana,
+    functions: statistics.functions,
+    categories: statistics.categories,
+    manaCurve: statistics.manaCurve,
+    manaCurveByColor: statistics.manaCurveByColor,
+    manaCurveByType: statistics.manaCurveByType,
+    tagCounts: statistics.tagCounts,
+    roleCounts: statistics.roleCounts,
+    legality: statistics.legality,
+    unrecognizedCards: statistics.unrecognizedCards
+  };
+}
+
+function compactCardRolesForResponse(cardRoles) {
+  if (!cardRoles) return cardRoles;
+  return {
+    summary: cardRoles.summary || null,
+    counts: cardRoles.counts || null,
+    cards: (cardRoles.cards || []).map(compactRoleCard),
+    coreCards: (cardRoles.coreCards || []).map(compactRoleCard),
+    supportCards: (cardRoles.supportCards || []).map(compactRoleCard),
+    payoffs: (cardRoles.payoffs || []).map(compactRoleCard),
+    enablers: (cardRoles.enablers || []).map(compactRoleCard),
+    flexCards: (cardRoles.flexCards || []).map(compactRoleCard),
+    suspiciousCards: (cardRoles.suspiciousCards || []).map(compactRoleCard),
+    cutCandidates: (cardRoles.cutCandidates || []).map(compactRoleCard)
+  };
+}
+
+function compactRoleCard(card) {
+  if (!card) return card;
+  return {
+    name: card.name,
+    inputName: card.inputName,
+    role: card.role,
+    verdict: card.verdict,
+    keepCutVerdict: card.keepCutVerdict,
+    reason: card.reason,
+    synergyWithCommander: card.synergyWithCommander,
+    planContribution: card.planContribution || [],
+    tags: card.tags || []
+  };
+}
+
+function compactPackagesForResponse(packages) {
+  return (packages || []).map((item) => ({
+    id: item.id,
+    label: item.label,
+    count: item.count,
+    status: item.status,
+    interpretation: item.interpretation,
+    risk: item.risk,
+    action: item.action,
+    relatedCards: (item.relatedCards || []).slice(0, 12).map(compactRoleCard)
+  }));
+}
+
+function compactCommanderProfile(profile) {
+  if (!profile) return profile;
+  return {
+    id: profile.id,
+    label: profile.label,
+    strategy: profile.strategy,
+    archetype: profile.archetype,
+    tags: profile.tags || [],
+    coreTags: profile.coreTags || [],
+    wincons: profile.wincons || []
   };
 }
 

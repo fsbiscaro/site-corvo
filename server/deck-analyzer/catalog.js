@@ -73,6 +73,7 @@ export async function resolveCommanderCard(commander, env, requestUrl) {
 export async function findCatalogCards(names, env, requestUrl) {
   const result = new Map();
   const lookupPlans = new Map((names || []).map((name) => [name, buildNameLookupPlan(name)]));
+  const requestBucketCache = new Map();
 
   for (const name of names || []) {
     const normalized = normalizeCardName(name);
@@ -83,7 +84,7 @@ export async function findCatalogCards(names, env, requestUrl) {
     for (const candidate of plan.candidates) {
       const candidateNormalized = normalizeCardName(candidate.value);
       const bucketKey = bucketKeyForName(candidate.value);
-      const bucket = await loadCatalogBucket(bucketKey, env, requestUrl);
+      const bucket = await loadCatalogBucket(bucketKey, env, requestUrl, requestBucketCache);
       fromCatalog = lookupBucket(bucket, candidateNormalized);
       if (fromCatalog) {
         matchedCandidate = candidate;
@@ -125,8 +126,13 @@ export function buildNameLookupPlan(name) {
   };
 }
 
-export async function loadCatalogBucket(key, env, requestUrl) {
-  if (BUCKET_CACHE.has(key)) return BUCKET_CACHE.get(key);
+export async function loadCatalogBucket(key, env, requestUrl, requestBucketCache = null) {
+  if (requestBucketCache?.has(key)) return requestBucketCache.get(key);
+  if (BUCKET_CACHE.has(key)) {
+    const cached = BUCKET_CACHE.get(key);
+    requestBucketCache?.set(key, cached);
+    return cached;
+  }
   if (!env?.ASSETS || !requestUrl) return null;
 
   try {
@@ -134,14 +140,17 @@ export async function loadCatalogBucket(key, env, requestUrl) {
     const response = await env.ASSETS.fetch(new Request(url.toString()));
     if (!response.ok) {
       rememberCatalogBucket(key, null);
+      requestBucketCache?.set(key, null);
       return null;
     }
     const bucket = await response.json();
     rememberCatalogBucket(key, bucket);
+    requestBucketCache?.set(key, bucket);
     return bucket;
   } catch (error) {
     console.error("Card catalog bucket unavailable", key, String(error?.message || error).slice(0, 120));
     rememberCatalogBucket(key, null);
+    requestBucketCache?.set(key, null);
     return null;
   }
 }

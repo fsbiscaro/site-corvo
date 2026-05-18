@@ -15,6 +15,7 @@ const CATALOG_ROOT = "/assets/data/card-catalog/buckets-v4";
 const BUCKET_CACHE = new Map();
 const MAX_BUCKET_CACHE_SIZE = 64;
 const BUCKET_PREFIX_LENGTH = 4;
+const DEFAULT_MAX_BUCKET_LOADS = Number.POSITIVE_INFINITY;
 
 export function normalizeCardName(name) {
   return normalizeFallbackName(name);
@@ -26,9 +27,9 @@ export function bucketKeyForName(name) {
   return `b_${key}`;
 }
 
-export async function enrichCardsWithCatalog(cards, env, requestUrl) {
+export async function enrichCardsWithCatalog(cards, env, requestUrl, options = {}) {
   const uniqueNames = [...new Set((cards || []).map((card) => card.name).filter(Boolean))];
-  const foundByName = await findCatalogCards(uniqueNames, env, requestUrl);
+  const foundByName = await findCatalogCards(uniqueNames, env, requestUrl, options);
 
   return (cards || []).map((card) => {
     const normalized = normalizeCardName(card.name);
@@ -70,10 +71,18 @@ export async function resolveCommanderCard(commander, env, requestUrl) {
   };
 }
 
-export async function findCatalogCards(names, env, requestUrl) {
+export async function findCatalogCards(names, env, requestUrl, options = {}) {
   const result = new Map();
   const lookupPlans = new Map((names || []).map((name) => [name, buildNameLookupPlan(name)]));
   const requestBucketCache = new Map();
+  const maxBucketLoads = Number.isFinite(Number(options.maxBucketLoads))
+    ? Math.max(0, Number(options.maxBucketLoads))
+    : DEFAULT_MAX_BUCKET_LOADS;
+  const budgetState = {
+    bucketLoads: 0,
+    maxBucketLoads,
+    exhausted: false
+  };
 
   for (const name of names || []) {
     const normalized = normalizeCardName(name);
@@ -84,7 +93,8 @@ export async function findCatalogCards(names, env, requestUrl) {
     for (const candidate of plan.candidates) {
       const candidateNormalized = normalizeCardName(candidate.value);
       const bucketKey = bucketKeyForName(candidate.value);
-      const bucket = await loadCatalogBucket(bucketKey, env, requestUrl, requestBucketCache);
+      const bucket = await loadCatalogBucket(bucketKey, env, requestUrl, requestBucketCache, budgetState);
+      if (budgetState.exhausted && !bucket) break;
       fromCatalog = lookupBucket(bucket, candidateNormalized);
       if (fromCatalog) {
         matchedCandidate = candidate;
@@ -98,7 +108,8 @@ export async function findCatalogCards(names, env, requestUrl) {
         inputName: name,
         matchedName: matchedCandidate?.value || fallback.canonicalName || fallback.name || name,
         method: matchedCandidate?.method || (fromCatalog ? "catalog" : "fallback_database"),
-        attempts: plan.candidates
+        attempts: plan.candidates,
+        budgetExhausted: budgetState.exhausted
       };
     }
     if (fallback) result.set(normalized, fallback);
@@ -126,16 +137,21 @@ export function buildNameLookupPlan(name) {
   };
 }
 
-export async function loadCatalogBucket(key, env, requestUrl, requestBucketCache = null) {
+export async function loadCatalogBucket(key, env, requestUrl, requestBucketCache = null, budgetState = null) {
   if (requestBucketCache?.has(key)) return requestBucketCache.get(key);
   if (BUCKET_CACHE.has(key)) {
     const cached = BUCKET_CACHE.get(key);
     requestBucketCache?.set(key, cached);
     return cached;
   }
+  if (budgetState && budgetState.bucketLoads >= budgetState.maxBucketLoads) {
+    budgetState.exhausted = true;
+    return null;
+  }
   if (!env?.ASSETS || !requestUrl) return null;
 
   try {
+    if (budgetState) budgetState.bucketLoads += 1;
     const url = new URL(`${CATALOG_ROOT}/${key}.json`, requestUrl);
     const response = await env.ASSETS.fetch(new Request(url.toString()));
     if (!response.ok) {

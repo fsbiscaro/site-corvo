@@ -26,7 +26,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   if (!rawDeckCards.length) return errorReport("DECKLIST_REQUIRED", "Cole uma decklist valida.", normalizedFormat, parsed);
 
   const selectedCommander = await resolveCommanderCard(commander, context.env, context.requestUrl);
-  const enrichedDeck = mergeCards(await enrichCardsWithCatalog(rawDeckCards, context.env, context.requestUrl));
+  const enrichedDeck = mergeCards(await enrichCardsWithCatalog(rawDeckCards, context.env, context.requestUrl, context.catalogOptions || {}));
   const statistics = buildDeckStatistics({ cards: enrichedDeck, parsedDeck: parsed, commander: selectedCommander, format: normalizedFormat });
   const commanderProfile = findCommanderProfile(selectedCommander);
   const tribalSummary = buildTribalSummary({ cards: enrichedDeck, commanderProfile });

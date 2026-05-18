@@ -224,7 +224,14 @@ async function analyzeDeck(request, env) {
     deckText: decklist,
     format,
     commander: body.commander || null
-  }, { env, requestUrl: request.url, includeTechnicalJson: false });
+  }, {
+    env,
+    requestUrl: request.url,
+    includeTechnicalJson: false,
+    catalogOptions: {
+      maxBucketLoads: resolveCatalogBucketBudget(env)
+    }
+  });
 
   const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
   const aiRequested = Boolean(body.use_ai);
@@ -311,6 +318,12 @@ function buildAiStatus(report, { requested, mode, env }) {
     cached: false,
     message: report.aiError || "A análise premium não foi gerada nesta leitura."
   };
+}
+
+function resolveCatalogBucketBudget(env) {
+  const configured = Number(env?.CATALOG_BUCKET_BUDGET);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return 36;
 }
 
 function buildScoringState(report) {
@@ -1148,14 +1161,51 @@ function aiCacheRequest(key) {
 async function saveDeckAnalysis(env, userId, decklist, report) {
   if (!env.DB) return false;
   try {
+    const historyReport = buildDeckAnalysisHistoryReport(report);
     await env.DB.prepare(
       "INSERT INTO deck_analyses (id, user_id, decklist, report_json, created_at) VALUES (?, ?, ?, ?, ?)"
-    ).bind(crypto.randomUUID(), userId, decklist, JSON.stringify(report), new Date().toISOString()).run();
+    ).bind(crypto.randomUUID(), userId, decklist, JSON.stringify(historyReport), new Date().toISOString()).run();
     return true;
   } catch (error) {
     console.error("Deck analysis history save failed", error);
     return false;
   }
+}
+
+function buildDeckAnalysisHistoryReport(report) {
+  if (!report || typeof report !== "object") return report;
+  return {
+    status: report.status,
+    format: report.format,
+    analysisLevel: report.analysisLevel,
+    commander: report.commander ? {
+      displayName: report.commander.displayName,
+      canonicalName: report.commander.canonicalName,
+      colorIdentity: report.commander.colorIdentity || [],
+      thumbnailUrl: report.commander.thumbnailUrl || null
+    } : null,
+    summary: report.summary || null,
+    catalogQuality: report.catalogQuality ? {
+      recognized: report.catalogQuality.recognized,
+      total: report.catalogQuality.total,
+      recognitionRate: report.catalogQuality.recognitionRate,
+      unrecognizedCount: report.catalogQuality.unrecognizedCount,
+      unrecognizedCards: report.catalogQuality.unrecognizedCards || []
+    } : null,
+    archetype: report.archetype ? {
+      primary: report.archetype.primary,
+      secondary: report.archetype.secondary || [],
+      confidence: report.archetype.confidence
+    } : null,
+    score: report.score ? {
+      final: report.score.final,
+      maxScore: report.score.maxScore,
+      limitReasons: report.score.limitReasons || []
+    } : null,
+    aiStatus: report.aiStatus || null,
+    scoring: report.scoring || null,
+    createdAt: new Date().toISOString()
+  };
 }
 
 async function readJson(request) {

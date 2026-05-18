@@ -1,4 +1,4 @@
-export function buildCorvoReview({ commander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, strategy, tribalSummary, score, diagnostics, externalBenchmark }) {
+﻿export function buildCorvoReview({ commander, statistics, manaAnalysis, probabilityAnalysis, cardRoles, packages, winconSummary, archetype, strategy, tribalSummary, score, diagnostics, externalBenchmark }) {
   const commanderName = commander?.displayName || "seu comandante";
   const mainWincon = winconSummary?.primaryWincons?.[0]?.label || "vantagem acumulada";
   const strategyName = strategy?.primaryArchetype?.label || archetype?.primary || "plano ainda em construcao";
@@ -200,5 +200,5 @@ function findOdds(probabilityAnalysis, key) {
 }
 
 function confidenceLabel(value) {
-  return ({ high: "alta", medium: "média", low: "baixa" })[value] || value || "-";
+  return ({ high: "alta", medium_high: "média/alta", medium: "média", low_medium: "baixa/média", low: "baixa" })[value] || value || "-";
 }

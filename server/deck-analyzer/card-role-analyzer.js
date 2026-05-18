@@ -210,7 +210,8 @@ function matchesTribe(card, tribalSummary) {
 }
 
 function isStealEffect(card) {
-  return /gain control of target|until end of turn/i.test(textOf(card));
+  const text = textOf(card);
+  return /gain control of target/i.test(text) && /until end of turn/i.test(text);
 }
 
 function isEquipmentOrAura(card) {

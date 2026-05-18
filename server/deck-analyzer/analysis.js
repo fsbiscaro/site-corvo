@@ -33,7 +33,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   const validation = validateFormatRules({ format: normalizedFormat, commander: selectedCommander, statistics, cards: enrichedDeck, parsedDeck: parsed });
   let winconSummary = detectWincons({ statistics, tribalSummary, commanderProfile, commander: selectedCommander });
   const strategySignals = detectStrategySignals({ cards: enrichedDeck, commander: selectedCommander, commanderProfile, tribalSummary, statistics, winconSummary });
-  const strategy = buildCorvoStrategy({
+  const strategy = applyRecognitionGateToStrategy(buildCorvoStrategy({
     signals: strategySignals.signals,
     signalDetails: strategySignals.details,
     commander: selectedCommander,
@@ -42,7 +42,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     statistics,
     winconSummary,
     cards: enrichedDeck
-  });
+  }), statistics);
   winconSummary = mergeStrategyWincons(winconSummary, strategy);
   const legacyArchetype = detectArchetype({ commander: selectedCommander, commanderProfile, statistics, tribalSummary, tagCounts: statistics.tagCounts, enrichedDeck, winconSummary });
   const archetype = strategyToLegacyArchetype(strategy, legacyArchetype);
@@ -95,7 +95,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     };
   }
 
-  const status = validation.warnings.length ? "partial" : "complete";
+  const status = validation.warnings.length || statistics.unknownCards ? "partial" : "complete";
   const report = {
     status,
     analysisLevel: "local_catalog",
@@ -366,13 +366,40 @@ function mergeStrategyWincons(winconSummary, strategy) {
   };
 }
 
+function applyRecognitionGateToStrategy(strategy, statistics) {
+  const ratio = Number(statistics?.recognitionRatio || 0);
+  if (!strategy?.primaryArchetype || ratio >= 0.98) return strategy;
+
+  const gate = ratio >= 0.95
+    ? { maxConfidence: 0.74, level: "medium_high", message: "Confiança limitada porque algumas cartas não foram reconhecidas." }
+    : ratio >= 0.9
+      ? { maxConfidence: 0.65, level: "medium", message: "Confiança limitada por reconhecimento abaixo de 95%." }
+      : { maxConfidence: 0.54, level: "low_medium", message: "Confiança baixa porque menos de 90% da lista foi reconhecida." };
+
+  const primary = {
+    ...strategy.primaryArchetype,
+    confidence: Number(Math.min(Number(strategy.primaryArchetype.confidence || 0), gate.maxConfidence).toFixed(2)),
+    evidence: [...(strategy.primaryArchetype.evidence || []), gate.message],
+    missing: [...(strategy.primaryArchetype.missing || []), `${statistics.unknownCards} carta(s) pendente(s) de reconhecimento.`]
+  };
+
+  return {
+    ...strategy,
+    primaryArchetype: primary,
+    confidenceLevel: gate.level,
+    archetypeScores: (strategy.archetypeScores || []).map((item, index) => index === 0 ? { ...item, confidence: primary.confidence } : item)
+  };
+}
+
 function buildCatalogQuality(statistics, cards = []) {
   const unknownCards = (cards || []).filter((card) => card.databaseStatus === "unknown");
   return {
     recognized: statistics.recognizedCards,
     total: statistics.totalCardsInDecklist,
     unrecognized: statistics.unknownCards,
+    unrecognizedCount: statistics.unknownCards,
     recognitionRatio: Number((statistics.recognitionRatio || 0).toFixed(4)),
+    recognitionRate: Number((statistics.recognitionRatio || 0).toFixed(4)),
     unrecognizedCards: statistics.unknownCardNames || [],
     unrecognizedDetails: buildUnrecognizedDetails(statistics, unknownCards),
     catalogUpdateSuggestions: buildCatalogUpdateSuggestions(statistics, unknownCards)
@@ -390,6 +417,7 @@ function buildUnrecognizedDetails(statistics, unknownCards = []) {
       normalizedName: normalizeCardName(name),
       reason: debug.reason || "Nao houve match exato em nome canonico, nomes impressos traduzidos ou fallback local.",
       attempts,
+      resolutionAttempts: attempts,
       suggestions: buildAliasSuggestions(name, attempts),
       checks: {
         accentInsensitiveName: true,

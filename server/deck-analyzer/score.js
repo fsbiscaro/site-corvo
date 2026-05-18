@@ -15,13 +15,25 @@ export function buildDeckScore({ format, statistics, validation, archetype, comm
       mana: 0,
       commanderSynergy: 0,
       maxScore: 0,
-      limitReasons: ["A analise foi bloqueada por erro estrutural."]
+      limitReasons: ["A análise foi bloqueada por erro estrutural."]
     };
+  }
+
+  const recognitionRatio = Number(statistics.recognitionRatio || 0);
+  if (recognitionRatio < 0.9) {
+    maxScore = Math.min(maxScore, 7);
+    limitReasons.push("Menos de 90% da lista foi reconhecida; a leitura é parcial.");
+  } else if (recognitionRatio < 0.95) {
+    maxScore = Math.min(maxScore, 8);
+    limitReasons.push("Menos de 95% da lista foi reconhecida; a confiança fica limitada.");
+  } else if (recognitionRatio < 0.98) {
+    maxScore = Math.min(maxScore, 8.5);
+    limitReasons.push("Algumas cartas ainda não foram reconhecidas; teto limitado até revisar o catálogo.");
   }
 
   if (isCommanderLike && statistics.totalCardsInDecklist !== 99) {
     maxScore = Math.min(maxScore, 7);
-    limitReasons.push("A lista nao bate as 99 cartas do formato com o comandante separado.");
+    limitReasons.push("A lista não bate as 99 cartas do formato com o comandante separado.");
   }
   if (validation.warnings.some((item) => item.code === "COMMANDER_INCLUDED_IN_DECKLIST")) {
     maxScore = Math.min(maxScore, 7.5);
@@ -29,23 +41,23 @@ export function buildDeckScore({ format, statistics, validation, archetype, comm
   }
   if (statistics.unknownRatio > 0.2) {
     maxScore = Math.min(maxScore, 6.5);
-    limitReasons.push("Muitas cartas ainda nao foram reconhecidas pelo catalogo local.");
+    limitReasons.push("Muitas cartas ainda não foram reconhecidas pelo catálogo local.");
   }
   if (commanderProfile && scoreCommanderSynergy(statistics, commanderProfile, tribalSummary) < 6.4) {
     maxScore = Math.min(maxScore, 7);
-    limitReasons.push("A lista ainda nao sustenta bem o plano esperado do comandante.");
+    limitReasons.push("A lista ainda não sustenta bem o plano esperado do comandante.");
   }
   if (winconSummary?.missingWinconWarning) {
     maxScore = Math.min(maxScore, 7.5);
-    limitReasons.push("A condicao de vitoria ainda esta pouco definida.");
+    limitReasons.push("A condição de vitória ainda está pouco definida.");
   }
   if (commanderProfile?.wantsProtection && (statistics.functions?.protection || 0) < 2) {
     maxScore = Math.min(maxScore, 7.5);
-    limitReasons.push("A protecao esta baixa para um deck dependente do comandante.");
+    limitReasons.push("A proteção está baixa para um deck dependente do comandante.");
   }
   if (isCommanderLike && (statistics.mana?.permanentRamp || 0) < 8) {
     maxScore = Math.min(maxScore, 7.5);
-    limitReasons.push("O ramp permanente esta abaixo do esperado para Commander.");
+    limitReasons.push("O ramp permanente está abaixo do esperado para Commander.");
   }
   if ((archetype?.confidence || 0) < 0.6) {
     maxScore = Math.min(maxScore, 8);

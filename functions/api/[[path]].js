@@ -1,5 +1,5 @@
 import { BASIC_LANDS_PT, PT_CARD_ALIASES } from "../../server/deck-analyzer/card-aliases.js";
-import { analyzeDeckRequest, attachExternalBenchmark, buildAiPrompt, fetchExternalCommanderBenchmark, fixPtBrCopy, localizeReportPtBr, normalizeAiMode, parseAiAnalysisText, parseDeckRequest, parseDeckText, renderAiAnalysisAsText } from "../../server/deck-analyzer/index.js";
+import { analyzeDeckRequest, attachExternalBenchmark, fetchExternalCommanderBenchmark, getCorvoAiModel, isCorvoAiConfigured, localizeReportPtBr, normalizeAiMode, parseDeckRequest, runCorvoAiAnalysis } from "../../server/deck-analyzer/index.js";
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
@@ -68,6 +68,7 @@ async function health(env) {
     version: "2026-05-15.1",
     dbConfigured: Boolean(env.DB),
     openAiConfigured: Boolean(env.OPENAI_API_KEY),
+    corvoAiModel: getCorvoAiModel(env),
     adminBootstrapConfigured: Boolean(env.CORVO_ADMIN_EMAIL && env.CORVO_ADMIN_PASSWORD),
     schemaReady: false
   };
@@ -227,17 +228,12 @@ async function analyzeDeck(request, env) {
 
   const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
   const aiRequested = Boolean(body.use_ai);
-  const runInlineAi = aiRequested && Boolean(body.inline_ai || body.inlineAi);
-  if (aiRequested && !runInlineAi && report.status !== "error") {
-    report.aiDeferred = true;
-    report.aiError = "A leitura técnica foi entregue primeiro para não travar o Worker. A análise premium do Corvo vai rodar em uma etapa separada.";
-    if (report.status === "complete") report.status = "partial";
-  }
-
-  if (runInlineAi && report.status !== "error") {
+  if (aiRequested && report.status !== "error") {
     try {
-      const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
-      if (externalBenchmark) attachExternalBenchmark(report, externalBenchmark);
+      if (aiMode === "DEEP_AI") {
+        const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
+        if (externalBenchmark) attachExternalBenchmark(report, externalBenchmark);
+      }
     } catch (error) {
       report.externalBenchmark = { source: "EDHREC", status: "unavailable", detail: String(error.message || error).slice(0, 120) };
     }
@@ -287,7 +283,7 @@ function buildAiStatus(report, { requested, mode, env }) {
       requested,
       status: "complete",
       provider: "openai",
-      model: env.OPENAI_MODEL || "gpt-4.1-mini",
+      model: getCorvoAiModel(env),
       mode,
       cached: Boolean(report.aiCached),
       message: report.aiCached ? "Análise premium recuperada do cache." : "Análise premium gerada pela IA do Corvo."
@@ -299,30 +295,18 @@ function buildAiStatus(report, { requested, mode, env }) {
       requested: false,
       status: "not_requested",
       provider: "openai",
-      model: env.OPENAI_MODEL || "gpt-4.1-mini",
+      model: getCorvoAiModel(env),
       mode,
       cached: false,
       message: "Modo local usado nesta leitura."
     };
   }
 
-  if (report.aiDeferred) {
-    return {
-      requested: true,
-      status: "deferred",
-      provider: "openai",
-      model: env.OPENAI_MODEL || "gpt-4.1-mini",
-      mode,
-      cached: false,
-      message: report.aiError || "A análise premium foi adiada para preservar a resposta técnica."
-    };
-  }
-
   return {
     requested: true,
-    status: "unavailable",
+    status: isCorvoAiConfigured(env) ? "failed" : "unavailable",
     provider: "openai",
-    model: env.OPENAI_MODEL || "gpt-4.1-mini",
+    model: getCorvoAiModel(env),
     mode,
     cached: false,
     message: report.aiError || "A análise premium não foi gerada nesta leitura."
@@ -479,11 +463,12 @@ function confidenceFromNumber(value) {
   const number = Number(value || 0);
   if (number >= 0.75) return "alta";
   if (number >= 0.55) return "média";
+  if (number >= 0.45) return "baixa/média";
   return "baixa";
 }
 
 function confidenceLabel(value) {
-  return ({ high: "alta", medium: "média", low: "baixa" })[value] || "";
+  return ({ high: "alta", medium_high: "média/alta", medium: "média", low_medium: "baixa/média", low: "baixa" })[value] || "";
 }
 
 async function getCurrentUser(request, env) {
@@ -1085,53 +1070,33 @@ function buildCorvoNote({ commander, total, foundTotal, averageManaValue, lands,
 
 
 async function generateAiDeckReading(env, report, options = {}) {
-  if (!env.OPENAI_API_KEY) {
-    return { analysis: null, text: "", error: "A análise premium precisa da secret OPENAI_API_KEY no Worker. Mantive a leitura técnica local como parcial." };
+  if (!isCorvoAiConfigured(env)) {
+    return { analysis: null, text: "", error: "OPENAI_API_KEY não configurada. Análise premium indisponível no momento; exibindo leitura técnica local." };
   }
 
-  const model = env.OPENAI_MODEL || "gpt-4.1-mini";
   const mode = normalizeAiMode(options.mode);
-  const maxScore = Number(report.scoreLimits?.maxScore ?? report.score?.maxScore ?? 10);
   const cacheKey = await buildAiCacheKey({ decklist: options.decklist, commander: options.commander || report.commander, format: options.format || report.format, mode });
   const cached = await readAiCache(cacheKey);
   if (cached) return { ...cached, cached: true };
 
-  const prompt = fixPtBrCopy(buildAiPrompt(report, { mode }));
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), mode === "DEEP_AI" ? 35000 : 12000);
+  const timeout = setTimeout(() => controller.abort(), mode === "DEEP_AI" ? 20000 : 12000);
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        instructions: "Você é o Corvo, analista de Commander do Grimório do Corvo. Use apenas o JSON técnico, escreva em português brasileiro com acentuação correta e respeite o teto de nota.",
-        input: prompt,
-        temperature: 0.35,
-        max_output_tokens: mode === "DEEP_AI" ? 3600 : 2200
-      })
-    });
-
-    if (!response.ok) {
-      console.error("OpenAI error", response.status, await response.text());
-      return { analysis: null, text: "", error: "A análise com IA não respondeu agora; mantive a leitura técnica local." };
-    }
-
-    const data = await response.json();
-    const rawText = extractOpenAiText(data).trim();
-    const analysis = parseAiAnalysisText(rawText, maxScore);
-    const text = renderAiAnalysisAsText(analysis);
-    const result = { analysis, text };
+    const result = await runCorvoAiAnalysis(report, env, { mode, signal: controller.signal });
+    if (result.error) return { analysis: null, text: "", error: result.error };
     await writeAiCache(cacheKey, result);
     return result;
   } catch (error) {
     console.error("OpenAI unavailable", error);
-    return { analysis: null, text: "", error: "A análise com IA falhou sem travar o deck; a leitura local continua disponível." };
+    const timedOut = error?.name === "AbortError";
+    return {
+      analysis: null,
+      text: "",
+      error: timedOut
+        ? "A análise premium passou do tempo limite de 20 segundos. Exibindo leitura técnica local."
+        : "A análise com IA falhou sem travar o deck; a leitura local continua disponível."
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -1180,17 +1145,6 @@ function aiCacheRequest(key) {
   return new Request(`https://grimorio.local/ai-cache/${key}`);
 }
 
-function extractOpenAiText(data) {
-  if (typeof data.output_text === "string") return data.output_text;
-  const pieces = [];
-  for (const item of data.output || []) {
-    for (const content of item.content || []) {
-      if (content.type === "output_text" && content.text) pieces.push(content.text);
-      if (content.type === "text" && content.text) pieces.push(content.text);
-    }
-  }
-  return pieces.join("\n\n");
-}
 async function saveDeckAnalysis(env, userId, decklist, report) {
   if (!env.DB) return false;
   try {

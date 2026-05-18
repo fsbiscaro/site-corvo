@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { analyzeDeckRequest, calculateHypergeometricProbability, findCatalogCards, parseDeckRequest, parseDeckText, runBasicDiagnostics } from "../server/deck-analyzer/index.js";
+import { analyzeDeckRequest, calculateHypergeometricProbability, findCatalogCards, fixPtBrCopy, parseDeckRequest, parseDeckText, runBasicDiagnostics, runCorvoAiAnalysis } from "../server/deck-analyzer/index.js";
 
 const fileAssetEnv = {
   ASSETS: {
@@ -491,7 +491,7 @@ test("strategy engine reconhece Juri como aristocrats e rejeita combo sem linha"
   }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
 
   assert.equal(result.strategy.primaryArchetype.label, "Sacrificio / Aristocrats");
-  assert.notEqual(result.archetype.primary, "Plano em construÃ§Ã£o");
+  assert.notEqual(result.archetype.primary, "Plano em construção");
   assert.ok(!/Human Tribal/i.test(result.strategy.primaryArchetype.label));
   assert.ok(result.strategy.rejectedArchetypes.some((item) => item.id === "combo"));
   assert.ok(result.cardRoles.coreCards.some((card) => /Viscera Seer|Goblin Bombardment|Carrion Feeder/.test(card.name)));
@@ -613,6 +613,35 @@ test("deck com muitas cartas desconhecidas reduz maxScore", async () => {
   assert.equal(result.score.maxScore, 6.5);
 });
 
+test("reconhecimento 87/99 limita status, confianca e teto", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: "87 Island\n12 Carta Fora Do Catalogo"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.equal(result.status, "partial");
+  assert.equal(result.statistics.recognizedCards, 87);
+  assert.equal(result.catalogQuality.unrecognizedCount, 12);
+  assert.equal(result.catalogQuality.recognitionRate, 0.8788);
+  assert.notEqual(result.strategy.confidenceLevel, "high");
+  assert.ok(result.score.maxScore <= 7);
+  assert.ok(result.score.limitReasons.some((reason) => reason.includes("90%")));
+});
+
+test("cartas nao reconhecidas retornam debug de resolucao", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    deckText: "1 Carta Misteriosa Do Corvo\n59 Island"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  const pending = result.catalogQuality.unrecognizedDetails[0];
+  assert.equal(pending.inputName, "Carta Misteriosa Do Corvo");
+  assert.equal(pending.normalizedName, "carta misteriosa do corvo");
+  assert.ok(Array.isArray(pending.resolutionAttempts));
+  assert.ok(pending.resolutionAttempts.length > 0);
+  assert.ok(Array.isArray(result.catalogQuality.catalogUpdateSuggestions));
+});
+
 test("deck tribal sem commander profile ainda infere tribo principal", async () => {
   const result = await analyzeDeckRequest({
     format: "casual",
@@ -621,6 +650,67 @@ test("deck tribal sem commander profile ainda infere tribo principal", async () 
 
   assert.equal(result.tribalSummary.primaryTribe, "Dragon");
   assert.ok(result.tribalSummary.tribalCreatures > 0);
+});
+
+test("IA do Corvo chama OpenAI quando configurada", async () => {
+  const report = await analyzeDeckRequest({
+    format: "casual",
+    deckText: "20 Mountain\n20 Lightning Strike\n20 Monastery Swiftspear"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  let called = false;
+  const result = await runCorvoAiAnalysis(report, { OPENAI_API_KEY: "test-key", CORVO_AI_MODEL: "test-model" }, {
+    mode: "standard",
+    fetchFn: async (url, options) => {
+      called = true;
+      assert.equal(url, "https://api.openai.com/v1/responses");
+      assert.equal(options.headers.Authorization, "Bearer test-key");
+      const body = JSON.parse(options.body);
+      assert.equal(body.model, "test-model");
+      return new Response(JSON.stringify({
+        output_text: JSON.stringify({
+          summary: "Leitura premium do Corvo.",
+          planA: "Pressionar cedo.",
+          planB: "Finalizar com dano direto.",
+          howItWins: "Dano de combate e burn.",
+          score: { value: 6.5, explanation: "Dentro do teto técnico." }
+        })
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+  });
+
+  assert.equal(called, true);
+  assert.equal(result.analysis.summary, "Leitura premium do Corvo.");
+  assert.equal(result.analysis.score.value, Math.min(6.5, report.scoreLimits.maxScore));
+});
+
+test("IA do Corvo retorna erro claro sem chave", async () => {
+  const result = await runCorvoAiAnalysis({ scoreLimits: { maxScore: 7 } }, {}, { mode: "standard" });
+
+  assert.equal(result.analysis, null);
+  assert.match(result.error, /OPENAI_API_KEY/);
+});
+
+test("razoes de roles nao confundem remocao e protecao com roubo", async () => {
+  const result = await analyzeDeckRequest({
+    format: "casual",
+    commander: { name: "K'rrik, Son of Yawgmoth", colorIdentity: ["B"] },
+    deckText: "30 Swamp\n1 Defile\n1 Undying Malice\n1 Armor of Shadows\n1 Tendrils of Agony"
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  const text = result.cardRoles.cards
+    .filter((card) => /Defile|Undying Malice|Armor of Shadows/.test(card.name))
+    .map((card) => card.reason)
+    .join(" ");
+
+  assert.ok(!/roubo tempor/i.test(text));
+});
+
+test("i18n corrige acentos fixos renderizados", () => {
+  const fixed = fixPtBrCopy("catalogo tecnico interacao protecao condicao vitoria sacrificio nucleo maos ate esta medio proximo maximo selecoes dao");
+
+  assert.equal(fixed, "catálogo técnico interação proteção condição vitória sacrifício núcleo mãos até está médio próximo máximo seleções dão");
+  assert.ok(!/\bcatalogo\b|\btecnico\b|\binteracao\b|\bprotecao\b|\bcondicao\b|\bvitoria\b|\bsacrificio\b|\bnucleo\b|\bmaos\b|\bate\b|\bmedio\b|\bproximo\b|\bmaximo\b|\bselecoes\b|\bdao\b/.test(fixed));
 });
 
 test("calcula probabilidade hipergeometrica para categorias", () => {

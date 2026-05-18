@@ -9,6 +9,7 @@ export { analyzeDeckRequest, attachExternalBenchmark, generateDatabaseDraftForUn
 export { detectArchetype } from "./archetype-detector.js";
 export { ARCHETYPE_MODELS, getArchetypeModel } from "./archetype-models.js";
 export { AI_MODES, buildAiPrompt, buildAiTechnicalPayload, normalizeAiMode, parseAiAnalysisText, renderAiAnalysisAsText } from "./ai-analysis.js";
+export { buildCorvoAiPrompt, fallbackToLocalReview, getCorvoAiModel, isCorvoAiConfigured, parseCorvoAiResponse, runCorvoAiAnalysis } from "./ai/corvo-ai.js";
 export { findCommanderProfile } from "./commander-profiles.js";
 export { findCatalogCards, formatCardDisplayName, normalizeCardName, resolveCommanderCard, extractSubtypesFromTypeLine } from "./catalog.js";
 export { expectedMainboardSize, expectedTotalSize, formatLabel, normalizeFormat, validateFormatRules } from "./format-rules.js";

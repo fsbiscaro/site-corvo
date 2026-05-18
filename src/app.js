@@ -492,7 +492,7 @@ function renderScoringState(scoring) {
 function formatPremiumStatus(status) {
   return ({
     complete: "completa",
-    deferred: "adiada",
+    failed: "falhou",
     unavailable: "indisponível",
     not_requested: "não solicitada",
     partial: "parcial",

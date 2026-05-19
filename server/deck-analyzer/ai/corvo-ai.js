@@ -35,8 +35,13 @@ export async function runCorvoAiAnalysis(report, env, options = {}) {
       model,
       instructions: "Você é o Corvo, analista de Commander do Grimório do Corvo. Use apenas o JSON técnico, escreva em português brasileiro com acentuação correta e respeite o teto de nota.",
       input: prompt,
+      text: {
+        format: {
+          type: "json_object"
+        }
+      },
       temperature: 0.35,
-      max_output_tokens: mode === "DEEP_AI" ? 3200 : 2000
+      max_output_tokens: mode === "DEEP_AI" ? 2800 : 2200
     })
   });
 
@@ -46,7 +51,11 @@ export async function runCorvoAiAnalysis(report, env, options = {}) {
   }
 
   const data = await response.json();
-  return parseCorvoAiResponse(data, maxScore);
+  try {
+    return parseCorvoAiResponse(data, maxScore);
+  } catch (error) {
+    return fallbackToLocalReview(`A OpenAI respondeu fora do JSON esperado: ${String(error?.message || error).slice(0, 140)}`);
+  }
 }
 
 export function parseCorvoAiResponse(data, maxScore = 10) {

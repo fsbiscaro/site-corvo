@@ -323,7 +323,7 @@ function buildAiStatus(report, { requested, mode, env }) {
 function resolveCatalogBucketBudget(env) {
   const configured = Number(env?.CATALOG_BUCKET_BUDGET);
   if (Number.isFinite(configured) && configured >= 0) return configured;
-  return 48;
+  return 400;
 }
 
 function buildScoringState(report) {

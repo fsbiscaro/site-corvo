@@ -5,8 +5,12 @@ export const AI_MODES = {
   DEEP: "DEEP_AI"
 };
 
-const STANDARD_ORACLE_LIMIT = 12;
+const STANDARD_ORACLE_LIMIT = 6;
 const DEEP_ORACLE_LIMIT = 45;
+const STANDARD_CARD_LIMIT = 45;
+const DEEP_CARD_LIMIT = 120;
+const STANDARD_ROLE_LIMIT = 10;
+const DEEP_ROLE_LIMIT = 24;
 
 export function normalizeAiMode(value) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -17,7 +21,8 @@ export function normalizeAiMode(value) {
 export function buildAiTechnicalPayload(report, options = {}) {
   const mode = normalizeAiMode(options.mode);
   const relevantNames = pickOracleTextNames(report, mode);
-  const cards = (report.deck?.mainboard || []).map((card) => compactCard(card, relevantNames));
+  const cards = selectAiCards(report, mode, relevantNames).map((card) => compactCard(card, relevantNames));
+  const roleLimit = mode === AI_MODES.DEEP ? DEEP_ROLE_LIMIT : STANDARD_ROLE_LIMIT;
 
   return {
     mode,
@@ -39,11 +44,11 @@ export function buildAiTechnicalPayload(report, options = {}) {
     probabilityAnalysis: report.probabilityAnalysis,
     packages: report.packages,
     cardRoles: {
-      coreCards: compactRoleCards(report.cardRoles?.coreCards),
-      payoffs: compactRoleCards(report.cardRoles?.payoffs),
-      enablers: compactRoleCards(report.cardRoles?.enablers),
-      flexSlots: compactRoleCards(report.cardRoles?.flexCards),
-      suspiciousCards: compactRoleCards(report.cardRoles?.suspiciousCards)
+      coreCards: compactRoleCards(report.cardRoles?.coreCards, roleLimit),
+      payoffs: compactRoleCards(report.cardRoles?.payoffs, roleLimit),
+      enablers: compactRoleCards(report.cardRoles?.enablers, roleLimit),
+      flexSlots: compactRoleCards(report.cardRoles?.flexCards, roleLimit),
+      suspiciousCards: compactRoleCards(report.cardRoles?.suspiciousCards, roleLimit)
     },
     cards,
     diagnostics: (report.diagnostics || []).map((item) => ({
@@ -54,7 +59,7 @@ export function buildAiTechnicalPayload(report, options = {}) {
       suggestion: item.suggestion
     })),
     scoreLimits: report.scoreLimits || { maxScore: report.score?.maxScore ?? 10, reasons: [] },
-    localCorvoReview: report.corvoReview,
+    localCorvoReview: compactLocalCorvoReview(report.corvoReview),
     externalBenchmark: mode === AI_MODES.DEEP ? report.externalBenchmark || null : null
   };
 }
@@ -81,6 +86,8 @@ export function buildAiPrompt(report, options = {}) {
     `- A nota final nunca pode passar de ${maxScore}.`,
     "- Escreva em português brasileiro natural, com acentuação correta.",
     "- Não escreva como dashboard. Escreva como consultor de deck.",
+    "- Seja direto: strings de 1 a 3 frases e arrays com no máximo 4 itens.",
+    "- Retorne JSON puro e completo, sem markdown.",
     "- Quando usar contexto externo, trate como comparação estratégica, não como fonte dos cálculos.",
     "",
     mode === AI_MODES.DEEP
@@ -199,8 +206,8 @@ function compactCard(card, oracleNames) {
   return item;
 }
 
-function compactRoleCards(cards = []) {
-  return cards.slice(0, 18).map((card) => ({
+function compactRoleCards(cards = [], limit = STANDARD_ROLE_LIMIT) {
+  return cards.slice(0, limit).map((card) => ({
     name: card.name,
     role: card.role,
     synergyWithCommander: card.synergyWithCommander,
@@ -208,6 +215,54 @@ function compactRoleCards(cards = []) {
     verdict: card.keepCutVerdict,
     reason: card.reason
   }));
+}
+
+function selectAiCards(report, mode, oracleNames) {
+  const limit = mode === AI_MODES.DEEP ? DEEP_CARD_LIMIT : STANDARD_CARD_LIMIT;
+  if (mode === AI_MODES.DEEP) return (report.deck?.mainboard || []).slice(0, limit);
+
+  const picked = new Map();
+  const add = (card) => {
+    if (!card || picked.size >= limit) return;
+    const key = card.displayName || card.canonicalName || card.inputName || card.name;
+    if (key && !picked.has(key)) picked.set(key, card);
+  };
+
+  for (const group of [
+    report.cardRoles?.coreCards,
+    report.cardRoles?.payoffs,
+    report.cardRoles?.enablers,
+    report.cardRoles?.suspiciousCards,
+    report.cardRoles?.cutCandidates,
+    report.cardRoles?.flexCards
+  ]) {
+    for (const card of group || []) add(card);
+  }
+
+  for (const card of report.deck?.mainboard || []) {
+    const name = card.displayName || card.canonicalName || card.inputName;
+    if (oracleNames.has(name) || card.databaseStatus !== "found") add(card);
+  }
+
+  for (const card of report.deck?.mainboard || []) {
+    if (picked.size >= limit) break;
+    if (card.tags?.some((tag) => ["engine", "payoff", "finisher", "protection", "removal", "card_draw", "tutor", "permanent_ramp"].includes(tag))) {
+      add(card);
+    }
+  }
+
+  return [...picked.values()];
+}
+
+function compactLocalCorvoReview(review) {
+  if (!review) return null;
+  return {
+    summary: review.summary,
+    commanderUnderstanding: review.commanderUnderstanding,
+    planA: review.planA,
+    planB: review.planB,
+    finalVerdict: review.finalVerdict
+  };
 }
 
 function extractJson(text) {

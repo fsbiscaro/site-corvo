@@ -642,6 +642,39 @@ test("cartas nao reconhecidas retornam debug de resolucao", async () => {
   assert.ok(Array.isArray(result.catalogQuality.catalogUpdateSuggestions));
 });
 
+test("resolver reconhece aliases reais do Krrik dentro do orcamento do Worker", async () => {
+  const names = [
+    "Asmodeus, o Arquidemonio",
+    "Malignidade Imortal",
+    "Armadura de Sombras",
+    "Fragmento do Arauto da Noite",
+    "Afinal Nem Morreu",
+    "Servo Sinistro",
+    "Corrupcao Consumidora",
+    "Saqueador Amaldicoado",
+    "Respire pela Ultima Vez",
+    "Cruelclaw's Heist",
+    "Starscape Cleric",
+    "Give In to Violence",
+    "Withering Torment",
+    "Ancient Cellarspawn",
+    "Persistent Constrictor"
+  ];
+
+  const result = await findCatalogCards(names, fileAssetEnv, "https://local.test/", { maxBucketLoads: 140 });
+
+  for (const name of names) {
+    const normalized = name.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[\u2019']/g, "")
+      .replace(/[^a-z0-9/,\-: ]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+    assert.ok(result.get(normalized), `${name} deveria ser resolvida pelo catálogo local`);
+  }
+});
+
 test("deck tribal sem commander profile ainda infere tribo principal", async () => {
   const result = await analyzeDeckRequest({
     format: "casual",

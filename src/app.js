@@ -1,5 +1,6 @@
 ﻿const STORAGE_KEY = "grimorio-corvo-state-v1";
 const AUTH_GATE_KEY = "grimorio-corvo-auth-gate";
+const APP_BUILD_VERSION = "2026-05-19.3";
 
 const defaultTopics = [
   { id: crypto.randomUUID(), title: "Upgrade de precon por até R$50", series: "Commander barato", status: "pending" },
@@ -315,9 +316,16 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
   if (submitButton) submitButton.disabled = true;
 
   try {
-    const response = await fetch(`${API_BASE}/decks/analyze`, {
+    const response = await fetch(`${API_BASE}/decks/analyze?build=${encodeURIComponent(APP_BUILD_VERSION)}&t=${Date.now()}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+        "X-Corvo-Build": APP_BUILD_VERSION
+      },
       body: JSON.stringify({ deck_text: decklist, format, commander, use_ai: useAi, ai_mode: aiMode })
     });
     const responseText = await response.text();
@@ -462,6 +470,7 @@ function renderAiStatus(report) {
     <section class="deck-section ai-status-panel">
       <h3>Status da análise</h3>
       <dl class="deck-stats">
+        <dt>Versão</dt><dd>${escapeHtml(report.buildVersion || APP_BUILD_VERSION)}</dd>
         <dt>IA premium</dt><dd>${escapeHtml(formatPremiumStatus(status.status || "not_requested"))}</dd>
         <dt>Modo</dt><dd>${escapeHtml(status.mode || "-")}</dd>
         <dt>Nota técnica local</dt><dd>${escapeHtml(scoring.localTechnicalScore ?? report.score?.final ?? "-")}/10</dd>

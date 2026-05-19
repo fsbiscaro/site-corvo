@@ -3,6 +3,7 @@ import { analyzeDeckRequest, attachExternalBenchmark, fetchExternalCommanderBenc
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
+const CORVO_BUILD_VERSION = "2026-05-19.3";
 const PASSWORD_ITERATIONS = 100000;
 const SCRYFALL_HEADERS = {
   Accept: "application/json",
@@ -65,7 +66,7 @@ async function health(env) {
   const payload = {
     ok: true,
     name: "Grimorio do Corvo API",
-    version: "2026-05-15.1",
+    version: CORVO_BUILD_VERSION,
     dbConfigured: Boolean(env.DB),
     openAiConfigured: Boolean(env.OPENAI_API_KEY),
     corvoAiModel: getCorvoAiModel(env),
@@ -266,6 +267,7 @@ async function analyzeDeck(request, env) {
   report.aiStatus = buildAiStatus(report, { requested: aiRequested, mode: aiMode, env });
   report.scoring = buildScoringState(report);
   const responseReport = compactDeckReportForResponse(report);
+  responseReport.buildVersion = CORVO_BUILD_VERSION;
   try {
     responseReport.historySaved = await saveDeckAnalysis(env, user.id, decklist, responseReport);
   } catch (error) {

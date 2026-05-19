@@ -1093,7 +1093,7 @@ async function generateAiDeckReading(env, report, options = {}) {
   if (cached) return { ...cached, cached: true };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), mode === "DEEP_AI" ? 20000 : 12000);
+  const timeout = setTimeout(() => controller.abort(), resolveAiTimeoutMs(env, mode));
 
   try {
     const result = await runCorvoAiAnalysis(report, env, { mode, signal: controller.signal });
@@ -1113,6 +1113,12 @@ async function generateAiDeckReading(env, report, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function resolveAiTimeoutMs(env, mode) {
+  const configured = Number(env?.CORVO_AI_TIMEOUT_MS);
+  if (Number.isFinite(configured) && configured >= 5000) return configured;
+  return mode === "DEEP_AI" ? 45000 : 28000;
 }
 
 async function buildAiCacheKey(payload) {

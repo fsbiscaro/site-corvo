@@ -1,6 +1,6 @@
 ﻿const STORAGE_KEY = "grimorio-corvo-state-v1";
 const AUTH_GATE_KEY = "grimorio-corvo-auth-gate";
-const APP_BUILD_VERSION = "2026-05-19.3";
+const APP_BUILD_VERSION = "2026-05-20.6";
 
 const defaultTopics = [
   { id: crypto.randomUUID(), title: "Upgrade de precon por até R$50", series: "Commander barato", status: "pending" },

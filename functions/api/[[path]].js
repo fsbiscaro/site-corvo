@@ -3,7 +3,7 @@ import { analyzeDeckRequest, attachExternalBenchmark, fetchExternalCommanderBenc
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
-const CORVO_BUILD_VERSION = "2026-05-19.3";
+const CORVO_BUILD_VERSION = "2026-05-20.6";
 const PASSWORD_ITERATIONS = 100000;
 const SCRYFALL_HEADERS = {
   Accept: "application/json",
@@ -221,6 +221,8 @@ async function analyzeDeck(request, env) {
   const body = await readJson(request);
   const decklist = String(body.deck_text ?? body.deckText ?? body.decklist ?? "");
   const format = String(body.format || "casual");
+  const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
+  const aiRequested = Boolean(body.use_ai);
   const report = await analyzeDeckRequest({
     deckText: decklist,
     format,
@@ -230,12 +232,10 @@ async function analyzeDeck(request, env) {
     requestUrl: request.url,
     includeTechnicalJson: false,
     catalogOptions: {
-      maxBucketLoads: resolveCatalogBucketBudget(env)
+      maxBucketLoads: resolveCatalogBucketBudget(env, { aiRequested })
     }
   });
 
-  const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
-  const aiRequested = Boolean(body.use_ai);
   if (aiRequested && report.status !== "error") {
     try {
       if (aiMode === "DEEP_AI") {
@@ -253,6 +253,8 @@ async function analyzeDeck(request, env) {
         report.aiText = aiResult.text;
         report.aiMode = aiMode;
         report.aiCached = Boolean(aiResult.cached);
+        report.aiFallbackMode = aiResult.fallbackMode || "";
+        report.aiFallbackReason = aiResult.fallbackReason || "";
       } else if (aiResult.error) {
         report.aiError = aiResult.error;
         if (report.status === "complete") report.status = "partial";
@@ -295,7 +297,11 @@ function buildAiStatus(report, { requested, mode, env }) {
       model: getCorvoAiModel(env),
       mode,
       cached: Boolean(report.aiCached),
-      message: report.aiCached ? "Análise premium recuperada do cache." : "Análise premium gerada pela IA do Corvo."
+      message: report.aiCached
+        ? "Análise premium recuperada do cache."
+        : report.aiFallbackMode
+          ? "Análise premium compacta gerada pela IA do Corvo."
+          : "Análise premium gerada pela IA do Corvo."
     };
   }
 
@@ -322,9 +328,10 @@ function buildAiStatus(report, { requested, mode, env }) {
   };
 }
 
-function resolveCatalogBucketBudget(env) {
+function resolveCatalogBucketBudget(env, options = {}) {
   const configured = Number(env?.CATALOG_BUCKET_BUDGET);
   if (Number.isFinite(configured) && configured >= 0) return configured;
+  if (options.aiRequested) return 40;
   return 400;
 }
 
@@ -1095,7 +1102,8 @@ async function generateAiDeckReading(env, report, options = {}) {
   if (cached) return { ...cached, cached: true };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), resolveAiTimeoutMs(env, mode));
+  const aiTimeoutMs = resolveAiTimeoutMs(env, mode);
+  const timeout = setTimeout(() => controller.abort(), aiTimeoutMs);
 
   try {
     const result = await runCorvoAiAnalysis(report, env, { mode, signal: controller.signal });
@@ -1109,8 +1117,8 @@ async function generateAiDeckReading(env, report, options = {}) {
       analysis: null,
       text: "",
       error: timedOut
-        ? "A análise premium passou do tempo limite de 20 segundos. Exibindo leitura técnica local."
-        : "A análise com IA falhou sem travar o deck; a leitura local continua disponível."
+        ? `A análise premium passou do tempo limite de ${Math.round(aiTimeoutMs / 1000)} segundos. Exibindo leitura técnica local.`
+        : `A análise com IA falhou sem travar o deck; a leitura local continua disponível. Detalhe: ${String(error?.message || error).slice(0, 180)}`
     };
   } finally {
     clearTimeout(timeout);
@@ -1118,14 +1126,15 @@ async function generateAiDeckReading(env, report, options = {}) {
 }
 
 function resolveAiTimeoutMs(env, mode) {
+  const minimum = mode === "DEEP_AI" ? 60000 : 45000;
   const configured = Number(env?.CORVO_AI_TIMEOUT_MS);
-  if (Number.isFinite(configured) && configured >= 5000) return configured;
-  return mode === "DEEP_AI" ? 45000 : 28000;
+  if (Number.isFinite(configured) && configured >= minimum) return Math.min(configured, 90000);
+  return minimum;
 }
 
 async function buildAiCacheKey(payload) {
   return sha256Hex(JSON.stringify({
-    v: "corvo-ai-review-v1",
+    v: "corvo-ai-review-v3",
     decklist: payload.decklist || "",
     commander: payload.commander?.canonicalName || payload.commander?.name || payload.commander?.displayName || "",
     format: payload.format || "casual",

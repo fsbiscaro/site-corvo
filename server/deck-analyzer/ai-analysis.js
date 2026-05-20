@@ -5,11 +5,11 @@ export const AI_MODES = {
   DEEP: "DEEP_AI"
 };
 
-const STANDARD_ORACLE_LIMIT = 6;
+const STANDARD_ORACLE_LIMIT = 4;
 const DEEP_ORACLE_LIMIT = 45;
-const STANDARD_CARD_LIMIT = 45;
+const STANDARD_CARD_LIMIT = 30;
 const DEEP_CARD_LIMIT = 120;
-const STANDARD_ROLE_LIMIT = 10;
+const STANDARD_ROLE_LIMIT = 8;
 const DEEP_ROLE_LIMIT = 24;
 
 export function normalizeAiMode(value) {
@@ -94,7 +94,7 @@ export function buildAiPrompt(report, options = {}) {
       ? "Modo DEEP_AI: você recebeu mais texto de cartas relevantes e, quando disponível, comparação externa de decks publicados."
       : "Modo STANDARD_AI: você recebeu estatísticas, tags e apenas texto de cartas relevantes para economizar custo.",
     "",
-    "A análise precisa responder: plano A, plano B, como ganha, base de mana, curva, ramp, compra, interação, proteção, dependência do comandante, cartas-chave, motores, payoffs, núcleo, flex slots, cartas suspeitas, cortes, upgrades, mulligan, matchups e plano de teste.",
+    "A análise precisa responder de forma compacta: plano A, plano B, como ganha, base de mana, curva, ramp, compra, interação, proteção, dependência do comandante, núcleo, flex slots, cortes, upgrades, mulligan e plano de teste.",
     "",
     "Dados técnicos:",
     JSON.stringify(payload, null, 2),

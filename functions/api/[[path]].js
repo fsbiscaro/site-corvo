@@ -3,7 +3,7 @@ import { analyzeDeckRequest, attachExternalBenchmark, fetchExternalCommanderBenc
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
-const CORVO_BUILD_VERSION = "2026-05-20.6";
+const CORVO_BUILD_VERSION = "2026-05-26.1";
 const PASSWORD_ITERATIONS = 100000;
 const SCRYFALL_HEADERS = {
   Accept: "application/json",
@@ -330,9 +330,8 @@ function buildAiStatus(report, { requested, mode, env }) {
 
 function resolveCatalogBucketBudget(env, options = {}) {
   const configured = Number(env?.CATALOG_BUCKET_BUDGET);
-  if (Number.isFinite(configured) && configured >= 0) return configured;
-  if (options.aiRequested) return 40;
-  return 400;
+  if (Number.isFinite(configured) && configured >= 0) return Math.max(configured, 50);
+  return 50;
 }
 
 function buildScoringState(report) {

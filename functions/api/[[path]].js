@@ -3,7 +3,7 @@ import { analyzeDeckRequest, attachExternalBenchmark, fetchExternalCommanderBenc
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
-const CORVO_BUILD_VERSION = "2026-05-26.1";
+const CORVO_BUILD_VERSION = "2026-05-26.2";
 const PASSWORD_ITERATIONS = 100000;
 const SCRYFALL_HEADERS = {
   Accept: "application/json",

@@ -11,10 +11,10 @@ import {
   isTreasureValue
 } from "./function-taxonomy.js";
 
-const CATALOG_ROOT = "/assets/data/card-catalog/buckets-v4";
+const CATALOG_ROOT = "/assets/data/card-catalog/buckets-v2";
 const BUCKET_CACHE = new Map();
 const MAX_BUCKET_CACHE_SIZE = 64;
-const BUCKET_PREFIX_LENGTH = 4;
+const BUCKET_PREFIX_LENGTH = 2;
 const DEFAULT_MAX_BUCKET_LOADS = Number.POSITIVE_INFINITY;
 
 export function normalizeCardName(name) {

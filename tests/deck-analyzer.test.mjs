@@ -661,7 +661,56 @@ test("resolver reconhece aliases reais do Krrik dentro do orcamento do Worker", 
     "Persistent Constrictor"
   ];
 
-  const result = await findCatalogCards(names, fileAssetEnv, "https://local.test/", { maxBucketLoads: 140 });
+  const result = await findCatalogCards(names, fileAssetEnv, "https://local.test/", { maxBucketLoads: 50 });
+
+  for (const name of names) {
+    const normalized = name.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[\u2019']/g, "")
+      .replace(/[^a-z0-9/,\-: ]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+    assert.ok(result.get(normalized), `${name} deveria ser resolvida pelo catálogo local`);
+  }
+});
+
+test("resolver reconhece aliases reais de Shiko/Narset dentro do orcamento do Worker", async () => {
+  const names = [
+    "Impeto Brilhante",
+    "Onda Desmanteladora",
+    "Redemoinho de Pensamentos",
+    "Mangara, o Diplomata",
+    "Epifania Sublime",
+    "Comando de Prismari",
+    "Arquimago Emerito",
+    "Artista da Fornalha Tempestuosa",
+    "Velomaco Sapioforte",
+    "Magma Opus",
+    "Iteracao Expressiva",
+    "Veyran, Voz da Dualidade",
+    "Considerar",
+    "Lier, Discipulo dos Afogados",
+    "Subjugar a Horda",
+    "Dragao Averneo Manaforme",
+    "Sorte Grande",
+    "Genio Arrogante",
+    "Iconoclasta da Terceira Via",
+    "Baral e Kari Zev",
+    "Ferrous Lake",
+    "Paisagem Perigosa",
+    "Taigam, Master Opportunist",
+    "Adaptive Training Post",
+    "Aligned Heart",
+    "Caldera Pyremaw",
+    "Transcendent Dragon",
+    "Transforming Flourish",
+    "Voracious Bibliophile",
+    "Elsha, Threefold Master",
+    "Jeskai Revelation"
+  ];
+
+  const result = await findCatalogCards(names, fileAssetEnv, "https://local.test/", { maxBucketLoads: 50 });
 
   for (const name of names) {
     const normalized = name.normalize("NFD")

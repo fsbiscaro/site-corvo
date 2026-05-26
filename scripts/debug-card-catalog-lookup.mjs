@@ -13,7 +13,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const defaultBulk = "C:/Users/fsbis/Downloads/all-cards-20260513092323.zip";
-const catalogRoot = path.join(repoRoot, "assets", "data", "card-catalog", "buckets-v4");
+const catalogRoot = path.join(repoRoot, "assets", "data", "card-catalog", "buckets-v2");
 
 const REQUIRED_NAMES = [
   "Cidadela de Nicol Bolas",
@@ -49,7 +49,7 @@ const names = args.names.length ? args.names : REQUIRED_NAMES;
 const bulkPath = args.bulk || defaultBulk;
 
 if (!fs.existsSync(catalogRoot)) {
-  throw new Error(`Catalog buckets-v4 not found: ${catalogRoot}`);
+  throw new Error(`Catalog buckets-v2 not found: ${catalogRoot}`);
 }
 
 const rawMatches = fs.existsSync(bulkPath) ? loadRawBulkMatches(bulkPath, names) : {};

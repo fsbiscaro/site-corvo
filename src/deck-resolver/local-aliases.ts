@@ -46,7 +46,32 @@ export const LOCAL_ALIASES: Record<string, string> = {
   "rito de razaketh": "Razaketh's Rite",
   "dragao decadente": "Decadent Dragon",
   "dragão decadente": "Decadent Dragon",
-  "gosto refinado": "Expensive Taste"
+  "gosto refinado": "Expensive Taste",
+  "impeto brilhante": "Shiny Impetus",
+  "ímpeto brilhante": "Shiny Impetus",
+  "onda desmanteladora": "Dismantling Wave",
+  "redemoinho de pensamentos": "Whirlwind of Thought",
+  "mangara, o diplomata": "Mangara, the Diplomat",
+  "epifania sublime": "Sublime Epiphany",
+  "comando de prismari": "Prismari Command",
+  "arquimago emerito": "Archmage Emeritus",
+  "arquimago emérito": "Archmage Emeritus",
+  "artista da fornalha tempestuosa": "Storm-Kiln Artist",
+  "velomaco sapioforte": "Velomachus Lorehold",
+  "iteracao expressiva": "Expressive Iteration",
+  "iteração expressiva": "Expressive Iteration",
+  "veyran, voz da dualidade": "Veyran, Voice of Duality",
+  "considerar": "Consider",
+  "lier, discipulo dos afogados": "Lier, Disciple of the Drowned",
+  "lier, discípulo dos afogados": "Lier, Disciple of the Drowned",
+  "subjugar a horda": "Vanquish the Horde",
+  "dragao averneo manaforme": "Manaform Hellkite",
+  "dragão averneo manaforme": "Manaform Hellkite",
+  "sorte grande": "Big Score",
+  "genio arrogante": "Haughty Djinn",
+  "gênio arrogante": "Haughty Djinn",
+  "iconoclasta da terceira via": "Third Path Iconoclast",
+  "baral e kari zev": "Baral and Kari Zev"
 };
 
 const NORMALIZED_ALIASES = new Map<string, string>(

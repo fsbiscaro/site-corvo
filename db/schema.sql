@@ -37,3 +37,13 @@ CREATE TABLE IF NOT EXISTS deck_analyses (
 );
 
 CREATE INDEX IF NOT EXISTS idx_deck_analyses_user_created ON deck_analyses(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS card_resolution_cache (
+  normalized_name TEXT PRIMARY KEY,
+  canonical_name TEXT NOT NULL,
+  resolved_json TEXT NOT NULL,
+  source TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_resolution_cache_updated ON card_resolution_cache(updated_at);

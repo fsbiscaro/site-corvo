@@ -1,6 +1,6 @@
 ﻿const STORAGE_KEY = "grimorio-corvo-state-v1";
 const AUTH_GATE_KEY = "grimorio-corvo-auth-gate";
-const APP_BUILD_VERSION = "2026-05-20.6";
+const APP_BUILD_VERSION = "2026-05-26.3";
 
 const defaultTopics = [
   { id: crypto.randomUUID(), title: "Upgrade de precon por até R$50", series: "Commander barato", status: "pending" },
@@ -316,7 +316,7 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
   if (submitButton) submitButton.disabled = true;
 
   try {
-    const response = await fetch(`${API_BASE}/decks/analyze?build=${encodeURIComponent(APP_BUILD_VERSION)}&t=${Date.now()}`, {
+    const resolveResponse = await fetch(`${API_BASE}/decks/resolve?build=${encodeURIComponent(APP_BUILD_VERSION)}&t=${Date.now()}`, {
       method: "POST",
       cache: "no-store",
       headers: {
@@ -326,7 +326,40 @@ async function analyzeDeckWithApi({ decklist, format, commander, aiMode = "stand
         Pragma: "no-cache",
         "X-Corvo-Build": APP_BUILD_VERSION
       },
-      body: JSON.stringify({ deck_text: decklist, format, commander, use_ai: useAi, ai_mode: aiMode })
+      body: JSON.stringify({ deck_text: decklist, format, commander })
+    });
+    const resolveText = await resolveResponse.text();
+    const resolvePayload = parseApiResponse(resolveText);
+    if (resolveResponse.status === 401) {
+      renderDeckLockedOutput();
+      openAuthModal();
+      return;
+    }
+    if (!resolveResponse.ok) {
+      output.innerHTML = renderDeckApiReport(normalizeFailedApiReport(resolvePayload, resolveResponse.status, resolveText));
+      return;
+    }
+
+    output.innerHTML = `<p>${useAi ? "Deck resolvido. Chamando análise do Corvo..." : "Deck resolvido. Calculando leitura técnica..."}</p>`;
+
+    const response = await fetch(`${API_BASE}/decks/analyze-resolved?build=${encodeURIComponent(APP_BUILD_VERSION)}&t=${Date.now()}`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+        "X-Corvo-Build": APP_BUILD_VERSION
+      },
+      body: JSON.stringify({
+        deck_text: decklist,
+        format,
+        commander,
+        use_ai: useAi,
+        ai_mode: aiMode,
+        resolvedDeck: resolvePayload.resolvedDeck
+      })
     });
     const responseText = await response.text();
     const report = parseApiResponse(responseText);

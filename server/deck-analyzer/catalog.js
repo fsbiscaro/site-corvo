@@ -401,7 +401,7 @@ function stripParentheticalTail(value) {
   return String(value || "").replace(/\s+\([A-Za-z0-9]{2,8}\)(?:\s+[A-Za-z0-9★-]+)?\s*$/, "").trim();
 }
 
-function normalizeCatalogCard(card) {
+export function normalizeCatalogCard(card) {
   const faceNames = parseFaceNames(card.name || "");
   const typeLine = card.typeLine || "";
   const cardTypes = Array.isArray(card.cardTypes) && card.cardTypes.length ? card.cardTypes : extractCardTypesFromTypeLine(typeLine);

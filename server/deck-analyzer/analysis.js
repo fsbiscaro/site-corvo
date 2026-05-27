@@ -21,12 +21,15 @@ import { detectWincons } from "./wincon-detector.js";
 export async function analyzeDeckRequest({ deckText, format = "casual", commander = null }, context = {}) {
   const includeTechnicalJson = Boolean(context.includeTechnicalJson);
   const normalizedFormat = normalizeFormat(format);
-  const parsed = parseDeckText(deckText);
-  const rawDeckCards = [...parsed.mainboard];
+  const resolvedDeck = context.resolvedDeck || null;
+  const parsed = resolvedDeck?.parsedDeck || parseDeckText(deckText);
+  const rawDeckCards = resolvedDeck?.cards?.length ? normalizeResolvedDeckCards(resolvedDeck.cards) : [...parsed.mainboard];
   if (!rawDeckCards.length) return errorReport("DECKLIST_REQUIRED", "Cole uma decklist valida.", normalizedFormat, parsed);
 
   const selectedCommander = await resolveCommanderCard(commander, context.env, context.requestUrl);
-  const enrichedDeck = mergeCards(await enrichCardsWithCatalog(rawDeckCards, context.env, context.requestUrl, context.catalogOptions || {}));
+  const enrichedDeck = mergeCards(resolvedDeck?.cards?.length
+    ? rawDeckCards
+    : await enrichCardsWithCatalog(rawDeckCards, context.env, context.requestUrl, context.catalogOptions || {}));
   const statistics = buildDeckStatistics({ cards: enrichedDeck, parsedDeck: parsed, commander: selectedCommander, format: normalizedFormat });
   const commanderProfile = findCommanderProfile(selectedCommander);
   const tribalSummary = buildTribalSummary({ cards: enrichedDeck, commanderProfile });
@@ -61,7 +64,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   if (validation.blockingErrors.length) {
     return {
       status: "error",
-      analysisLevel: "local_catalog",
+      analysisLevel: resolvedDeck ? "resolved_deck" : "local_catalog",
       format: normalizedFormat,
       errors: validation.blockingErrors,
       warnings: [...parsed.warnings, ...validation.warnings],
@@ -95,10 +98,10 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     };
   }
 
-  const status = validation.warnings.length || statistics.unknownCards ? "partial" : "complete";
+  const status = validation.warnings.length || statistics.unknownCards || resolvedDeck?.status === "partial" ? "partial" : "complete";
   const report = {
     status,
-    analysisLevel: "local_catalog",
+    analysisLevel: resolvedDeck ? "resolved_deck" : "local_catalog",
     format: normalizedFormat,
     commander: selectedCommander,
     commanderProfile,
@@ -106,7 +109,8 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     deck: {
       mainboard: enrichedDeck,
       sideboard: parsed.sideboard,
-      commanderSection: parsed.commander
+      commanderSection: parsed.commander,
+      resolvedDeck
     },
     statistics,
     tribalSummary,
@@ -118,6 +122,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
     cardRoles,
     packages,
     catalogQuality,
+    resolvedDeckMeta: resolvedDeck?.meta || null,
     corvoReview,
     diagnostics,
     warnings: [...parsed.warnings, ...validation.warnings],
@@ -450,6 +455,27 @@ function buildAliasSuggestions(name, attempts = []) {
     .map((item) => String(item).trim())
     .filter((item) => item && normalizeCardName(item) !== normalizeCardName(clean));
   return [...new Set(fromAttempts)].slice(0, 6);
+}
+
+function normalizeResolvedDeckCards(cards = []) {
+  return (cards || []).map((card) => ({
+    ...card,
+    quantity: Number(card.quantity || 0),
+    inputName: card.inputName || card.name,
+    name: card.canonicalName || card.name || card.inputName,
+    displayName: card.displayName || card.canonicalName || card.name || card.inputName,
+    manaValue: card.manaValue ?? null,
+    typeLine: card.typeLine || null,
+    oracleText: card.oracleText || "",
+    cardTypes: Array.isArray(card.cardTypes) ? card.cardTypes : [],
+    subtypes: Array.isArray(card.subtypes) ? card.subtypes : [],
+    colors: Array.isArray(card.colors) ? card.colors : [],
+    colorIdentity: Array.isArray(card.colorIdentity) ? card.colorIdentity : [],
+    legalities: card.legalities || {},
+    tags: Array.isArray(card.tags) ? card.tags : ["needs_review"],
+    databaseStatus: card.databaseStatus || (card.canonicalName ? "found" : "unknown"),
+    resolutionDebug: card.resolutionDebug || null
+  }));
 }
 
 function mergeCards(cards) {

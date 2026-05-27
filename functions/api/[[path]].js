@@ -1,9 +1,10 @@
 import { BASIC_LANDS_PT, PT_CARD_ALIASES } from "../../server/deck-analyzer/card-aliases.js";
 import { analyzeDeckRequest, attachExternalBenchmark, fetchExternalCommanderBenchmark, getCorvoAiModel, isCorvoAiConfigured, localizeReportPtBr, normalizeAiMode, parseDeckRequest, runCorvoAiAnalysis } from "../../server/deck-analyzer/index.js";
+import { resolveDeckRequest } from "../../server/deck-resolver/index.js";
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
-const CORVO_BUILD_VERSION = "2026-05-26.2";
+const CORVO_BUILD_VERSION = "2026-05-26.3";
 const PASSWORD_ITERATIONS = 100000;
 const SCRYFALL_HEADERS = {
   Accept: "application/json",
@@ -36,6 +37,8 @@ export async function handleApiRequest(request, env) {
     if (request.method === "POST" && route === "auth/login") return await login(request, env);
     if (request.method === "POST" && route === "auth/logout") return await logout(request, env);
     if (request.method === "GET" && route === "auth/me") return await me(request, env);
+    if (request.method === "POST" && route === "decks/resolve") return await resolveDeckEndpoint(request, env);
+    if (request.method === "POST" && route === "decks/analyze-resolved") return await analyzeResolvedDeckEndpoint(request, env);
     if (request.method === "POST" && route === "decks/analyze") return await analyzeDeck(request, env);
     if (request.method === "GET" && route === "admin/users") return await listUsers(request, env);
     if (request.method === "POST" && route === "admin/users") return await createUser(request, env);
@@ -214,6 +217,64 @@ async function createUser(request, env) {
   return json({ user: { id, email, display_name: displayName, role, plan, plan_status: planStatus } }, { status: 201 });
 }
 
+async function resolveDeckEndpoint(request, env) {
+  const user = await requireFeature(request, env, "decks");
+  if (user instanceof Response) return user;
+
+  const body = await readJson(request);
+  const decklist = String(body.deck_text ?? body.deckText ?? body.decklist ?? "");
+  if (!decklist.trim()) return json({ error: "Informe deck_text." }, { status: 400 });
+
+  const resolvedDeck = await resolveDeckRequest({
+    deckText: decklist,
+    format: String(body.format || "casual"),
+    commander: body.commander || null
+  }, {
+    env,
+    requestUrl: request.url
+  });
+
+  return json({ buildVersion: CORVO_BUILD_VERSION, resolvedDeck });
+}
+
+async function analyzeResolvedDeckEndpoint(request, env) {
+  const user = await requireFeature(request, env, "decks");
+  if (user instanceof Response) return user;
+
+  const body = await readJson(request);
+  const resolvedDeck = body.resolvedDeck || body.resolved_deck;
+  if (!resolvedDeck?.cards?.length) {
+    return json({ error: "Envie resolvedDeck gerado pelo endpoint /api/decks/resolve." }, { status: 400 });
+  }
+
+  const decklist = String(body.deck_text ?? body.deckText ?? body.decklist ?? deckTextFromResolvedDeck(resolvedDeck));
+  const format = String(body.format || resolvedDeck.format || "casual");
+  const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
+  const aiRequested = Boolean(body.use_ai);
+  const report = await analyzeDeckRequest({
+    deckText: decklist,
+    format,
+    commander: body.commander || resolvedDeck.commander || null
+  }, {
+    env,
+    requestUrl: request.url,
+    includeTechnicalJson: false,
+    resolvedDeck
+  });
+
+  return finalizeDeckAnalysisResponse({
+    env,
+    user,
+    report,
+    decklist,
+    format,
+    commander: body.commander || resolvedDeck.commander || null,
+    aiMode,
+    aiRequested,
+    allowAiNow: true
+  });
+}
+
 async function analyzeDeck(request, env) {
   const user = await requireFeature(request, env, "decks");
   if (user instanceof Response) return user;
@@ -223,6 +284,14 @@ async function analyzeDeck(request, env) {
   const format = String(body.format || "casual");
   const aiMode = normalizeAiMode(body.ai_mode || body.aiMode || body.analysisMode);
   const aiRequested = Boolean(body.use_ai);
+  const resolvedDeck = body.resolvedDeck || body.resolved_deck || await resolveDeckRequest({
+    deckText: decklist,
+    format,
+    commander: body.commander || null
+  }, {
+    env,
+    requestUrl: request.url
+  });
   const report = await analyzeDeckRequest({
     deckText: decklist,
     format,
@@ -231,12 +300,17 @@ async function analyzeDeck(request, env) {
     env,
     requestUrl: request.url,
     includeTechnicalJson: false,
+    resolvedDeck,
     catalogOptions: {
-      maxBucketLoads: resolveCatalogBucketBudget(env, { aiRequested })
+      maxBucketLoads: 0
     }
   });
 
-  if (aiRequested && report.status !== "error") {
+  const resolverExternalCalls = Number(resolvedDeck?.meta?.scryfallCollectionCalls || 0) + Number(resolvedDeck?.meta?.scryfallFuzzyCalls || 0);
+  if (aiRequested && resolverExternalCalls > 0 && report.status !== "error") {
+    report.aiError = "Deck resolvido nesta chamada. Para evitar o limite de subrequests do Worker, rode a análise premium em uma segunda chamada com /api/decks/analyze-resolved.";
+    if (report.status === "complete") report.status = "partial";
+  } else if (aiRequested && report.status !== "error") {
     try {
       if (aiMode === "DEEP_AI") {
         const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
@@ -278,6 +352,62 @@ async function analyzeDeck(request, env) {
     if (responseReport.status === "complete") responseReport.status = "partial";
   }
   return json(localizeReportPtBr(responseReport), { status: responseReport.status === "error" ? 400 : 200 });
+}
+
+async function finalizeDeckAnalysisResponse({ env, user, report, decklist, format, commander, aiMode, aiRequested, allowAiNow }) {
+  if (aiRequested && report.status !== "error") {
+    if (!allowAiNow) {
+      report.aiError = "Deck resolvido nesta chamada. Para evitar o limite de subrequests do Worker, rode a análise premium em uma segunda chamada com /api/decks/analyze-resolved.";
+      if (report.status === "complete") report.status = "partial";
+    } else {
+      try {
+        if (aiMode === "DEEP_AI") {
+          const externalBenchmark = await fetchExternalCommanderBenchmark({ commander: report.commander, mode: aiMode });
+          if (externalBenchmark) attachExternalBenchmark(report, externalBenchmark);
+        }
+      } catch (error) {
+        report.externalBenchmark = { source: "EDHREC", status: "unavailable", detail: String(error.message || error).slice(0, 120) };
+      }
+
+      try {
+        const aiResult = await generateAiDeckReading(env, report, { mode: aiMode, decklist, format, commander });
+        if (aiResult.analysis) {
+          report.aiAnalysis = aiResult.analysis;
+          report.aiText = aiResult.text;
+          report.aiMode = aiMode;
+          report.aiCached = Boolean(aiResult.cached);
+          report.aiFallbackMode = aiResult.fallbackMode || "";
+          report.aiFallbackReason = aiResult.fallbackReason || "";
+        } else if (aiResult.error) {
+          report.aiError = aiResult.error;
+          if (report.status === "complete") report.status = "partial";
+        }
+      } catch (error) {
+        report.aiError = "A anÃ¡lise com IA falhou sem travar o deck; a leitura local continua disponÃ­vel.";
+        report.aiDebug = String(error.message || error).slice(0, 180);
+        if (report.status === "complete") report.status = "partial";
+      }
+    }
+  }
+  report.aiEnabled = Boolean(report.aiAnalysis || report.aiText);
+  report.aiStatus = buildAiStatus(report, { requested: aiRequested, mode: aiMode, env });
+  report.scoring = buildScoringState(report);
+  const responseReport = compactDeckReportForResponse(report);
+  responseReport.buildVersion = CORVO_BUILD_VERSION;
+  try {
+    responseReport.historySaved = await saveDeckAnalysis(env, user.id, decklist, responseReport);
+  } catch (error) {
+    responseReport.historySaved = false;
+    responseReport.historyError = String(error.message || error).slice(0, 160);
+    if (responseReport.status === "complete") responseReport.status = "partial";
+  }
+  return json(localizeReportPtBr(responseReport), { status: responseReport.status === "error" ? 400 : 200 });
+}
+
+function deckTextFromResolvedDeck(resolvedDeck) {
+  return (resolvedDeck?.cards || [])
+    .map((card) => `${Number(card.quantity || 1)} ${card.inputName || card.canonicalName || card.name}`)
+    .join("\n");
 }
 
 async function parseDeckAnalyzer(request) {

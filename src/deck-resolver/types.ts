@@ -55,4 +55,5 @@ export type ResolverCache = {
 
 export type ScryfallClientOptions = {
   fetchFn?: typeof fetch;
+  fuzzyLimit?: number;
 };

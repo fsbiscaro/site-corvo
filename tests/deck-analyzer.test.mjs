@@ -117,6 +117,74 @@ const K_RRIK_TEST_DECK = `
 1 Anel Solar
 `;
 
+const K_RRIK_RESOLVER_INTEGRATION_DECK = `
+35 Pantano
+1 Ritual Sombrio
+1 Tutor Diabolico
+1 Pedra da Mente
+1 Diamante de Carvao
+1 Gavinhas da Agonia
+1 Mercador Cinzento de Asfodelos
+1 Cidadela de Nicol Bolas
+1 Maquinacoes de Gonti
+1 Alimentar o Enxame
+1 Malignidade Imortal
+1 Armadura de Sombras
+1 Presenca Medonha
+1 Lente Prismatica
+1 Pluma do Paraiso
+1 Chifre de Demonio
+1 Promessa de Poder
+1 Chainer Mestre da Demencia
+1 Pestilencia
+1 Elixir da Imortalidade
+1 Passagem do Ladino
+1 Parasita Thrull
+1 Sibilador da Basilica
+1 Impositor do Sindicato
+1 Pontifice do Flagelo
+1 Cajado do Magus da Morte
+1 Fonte Radiante
+1 Anel de Prisma
+1 Fonte das Agonias
+1 Macular
+1 Rito de Razaketh
+1 Sol Ring
+1 Arcane Signet
+1 Jet Medallion
+1 Wayfarer's Bauble
+1 Expedition Map
+1 Bontu's Monument
+1 Exsanguinate
+1 Sign in Blood
+1 Read the Bones
+1 Night's Whisper
+1 Hero's Downfall
+1 Go for the Throat
+1 Murderous Rider
+1 Toxic Deluge
+1 Damnation
+1 Mutilate
+1 Crypt Ghast
+1 Nirkana Revenant
+1 Vilis, Broker of Blood
+1 Asmodeus the Archfiend
+1 Darkness
+1 Profane Tutor
+1 Demonic Tutor
+1 Diabolic Intent
+1 Vampiric Tutor
+1 Aetherflux Reservoir
+1 Sensei's Divining Top
+1 Necropotence
+1 Phyrexian Arena
+1 Whip of Erebos
+1 Exquisite Blood
+1 Sanguine Bond
+1 Bloodchief Ascension
+1 Repay in Kind
+`;
+
 const JURI_ARISTOCRATS_TEST_DECK = `
 20 Swamp
 15 Mountain
@@ -194,6 +262,43 @@ const AGGRO_BURN_TEST_DECK = `
 4 Viashino Pyromancer
 4 Chain Lightning
 4 Skewer the Critics
+`;
+
+const SHIKO_RESOLVER_TEST_DECK = `
+20 Ilha
+24 Montanha
+24 Planicie
+1 Impeto Brilhante
+1 Onda Desmanteladora
+1 Redemoinho de Pensamentos
+1 Mangara, o Diplomata
+1 Epifania Sublime
+1 Comando de Prismari
+1 Arquimago Emerito
+1 Artista da Fornalha Tempestuosa
+1 Velomaco Sapioforte
+1 Magma Opus
+1 Iteracao Expressiva
+1 Veyran, Voz da Dualidade
+1 Considerar
+1 Lier, Discipulo dos Afogados
+1 Subjugar a Horda
+1 Dragao Averneo Manaforme
+1 Sorte Grande
+1 Genio Arrogante
+1 Iconoclasta da Terceira Via
+1 Baral e Kari Zev
+1 Ferrous Lake
+1 Paisagem Perigosa
+1 Taigam, Master Opportunist
+1 Adaptive Training Post
+1 Aligned Heart
+1 Caldera Pyremaw
+1 Transcendent Dragon
+1 Transforming Flourish
+1 Voracious Bibliophile
+1 Elsha, Threefold Master
+1 Jeskai Revelation
 `;
 
 const VOLTRON_TEST_DECK = `
@@ -483,6 +588,21 @@ test("K'rrik nao retorna plano em construcao e nao duplica nome do comandante", 
   assert.ok(!result.commander.displayName.includes("//"));
 });
 
+test("analyzer usa resolvedor limpo em K'rrik sem pendencias", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    commander: { name: "K'rrik, Filho de Yawgmoth", colorIdentity: ["B"] },
+    deckText: K_RRIK_RESOLVER_INTEGRATION_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.notEqual(result.status, "error");
+  assert.equal(result.deck.resolvedDeck.resolvedCount, 99);
+  assert.equal(result.deck.resolvedDeck.unresolvedCount, 0);
+  assert.equal(result.statistics.recognizedCards, 99);
+  assert.ok(result.archetype.primary.includes("K'rrik") || result.archetype.primary.includes("Mono Black K'rrik"));
+  assert.notEqual(result.archetype.primary, "Controle");
+});
+
 test("strategy engine reconhece Juri como aristocrats e rejeita combo sem linha", async () => {
   const result = await analyzeDeckRequest({
     format: "casual",
@@ -490,6 +610,8 @@ test("strategy engine reconhece Juri como aristocrats e rejeita combo sem linha"
     deckText: JURI_ARISTOCRATS_TEST_DECK
   }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
 
+  assert.equal(result.deck.resolvedDeck.resolvedCount, result.statistics.totalCardsInDecklist);
+  assert.equal(result.deck.resolvedDeck.unresolvedCount, 0);
   assert.equal(result.strategy.primaryArchetype.label, "Sacrificio / Aristocrats");
   assert.notEqual(result.archetype.primary, "Plano em construção");
   assert.ok(!/Human Tribal/i.test(result.strategy.primaryArchetype.label));
@@ -547,6 +669,19 @@ test("strategy engine reconhece aggro/burn sem chamar de combo", async () => {
 
   assert.ok(["Aggro", "Burn"].includes(result.strategy.primaryArchetype.label));
   assert.ok(result.strategy.rejectedArchetypes.some((item) => item.id === "combo"));
+});
+
+test("analyzer usa resolvedor limpo em Shiko/Narset sem pendencias", async () => {
+  const result = await analyzeDeckRequest({
+    format: "commander",
+    commander: { name: "Shiko and Narset, Unified", colorIdentity: ["W", "U", "R"] },
+    deckText: SHIKO_RESOLVER_TEST_DECK
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+
+  assert.notEqual(result.status, "error");
+  assert.equal(result.deck.resolvedDeck.resolvedCount, 99);
+  assert.equal(result.deck.resolvedDeck.unresolvedCount, 0);
+  assert.equal(result.statistics.recognizedCards, 99);
 });
 
 test("strategy engine reconhece voltron por auras, equipamentos e protecao", async () => {
@@ -725,10 +860,46 @@ test("resolver reconhece aliases reais de Shiko/Narset dentro do orcamento do Wo
 });
 
 test("deck tribal sem commander profile ainda infere tribo principal", async () => {
+  const tribalFetch = async (url) => {
+    if (String(url).includes("/cards/collection")) {
+      return new Response(JSON.stringify({
+        data: [
+          {
+            id: "mountain-test",
+            name: "Mountain",
+            cmc: 0,
+            type_line: "Basic Land — Mountain",
+            oracle_text: "({T}: Add {R}.)",
+            colors: [],
+            color_identity: ["R"],
+            keywords: [],
+            image_uris: {},
+            legalities: { commander: "legal" }
+          },
+          {
+            id: "lathliss-test",
+            name: "Lathliss, Dragon Queen",
+            cmc: 6,
+            type_line: "Legendary Creature — Dragon",
+            oracle_text: "Flying\nWhenever another nontoken Dragon you control enters, create a 5/5 red Dragon creature token with flying.",
+            colors: ["R"],
+            color_identity: ["R"],
+            keywords: ["Flying"],
+            image_uris: {},
+            legalities: { commander: "legal" }
+          }
+        ],
+        not_found: []
+      }), { status: 200 });
+    }
+
+    return new Response(JSON.stringify({ object: "error", details: "not found" }), { status: 404 });
+  };
+
   const result = await analyzeDeckRequest({
     format: "casual",
     deckText: "20 Mountain\n20 Lathliss, Dragon Queen\n20 Lathliss, Dragon Queen"
-  }, { env: fileAssetEnv, requestUrl: "https://local.test/" });
+  }, { env: fileAssetEnv, requestUrl: "https://local.test/", fetchFn: tribalFetch });
 
   assert.equal(result.tribalSummary.primaryTribe, "Dragon");
   assert.ok(result.tribalSummary.tribalCreatures > 0);

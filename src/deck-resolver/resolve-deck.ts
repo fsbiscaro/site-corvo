@@ -31,6 +31,7 @@ export async function resolveDeck(deckTextOrCards: string | ParsedDeckCard[], op
   const parsedCards = Array.isArray(deckTextOrCards) ? deckTextOrCards : parseDecklist(deckTextOrCards);
   const cache = options.cache || createMemoryResolutionCache();
   const useFuzzy = options.useFuzzy !== false;
+  const fuzzyLimit = Number.isFinite(Number(options.fuzzyLimit)) ? Math.max(0, Number(options.fuzzyLimit)) : 5;
   const resolvedCards = new Map<number, ResolvedDeckCard>();
   const candidateMap = new Map<number, Candidate[]>();
   const collectionNames: string[] = [];
@@ -73,12 +74,15 @@ export async function resolveDeck(deckTextOrCards: string | ParsedDeckCard[], op
     }
   }
 
-  if (useFuzzy) {
+  if (useFuzzy && fuzzyLimit > 0) {
+    let fuzzyAttempts = 0;
     for (let index = 0; index < parsedCards.length; index += 1) {
       if (resolvedCards.has(index)) continue;
+      if (fuzzyAttempts >= fuzzyLimit) break;
       const parsed = parsedCards[index];
       const candidates = candidateMap.get(index) || [];
       const fuzzyName = candidates[0]?.lookupName || parsed.inputName;
+      fuzzyAttempts += 1;
       const card = await resolveCardWithScryfallFuzzy(fuzzyName, { fetchFn: options.fetchFn });
       if (!card) continue;
       const normalized = normalizeScryfallCard(parsed, fuzzyName, "scryfall_fuzzy", card);

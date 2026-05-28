@@ -1,6 +1,6 @@
 import { BASIC_LANDS_PT, PT_CARD_ALIASES } from "../../server/deck-analyzer/card-aliases.js";
 import { analyzeDeckRequest, attachExternalBenchmark, fetchExternalCommanderBenchmark, getCorvoAiModel, isCorvoAiConfigured, localizeReportPtBr, normalizeAiMode, parseDeckRequest, runCorvoAiAnalysis } from "../../server/deck-analyzer/index.js";
-import { resolveDeckRequest } from "../../server/deck-resolver/index.js";
+import { createMemoryResolutionCache, resolveDeck as resolveCleanDeck } from "../../src/deck-resolver/resolve-deck.ts";
 
 const SESSION_COOKIE = "corvo_session";
 const SESSION_DAYS = 30;
@@ -15,6 +15,7 @@ const SCRYFALL_FETCH_TIMEOUT_MS = 3500;
 const FUZZY_FALLBACK_LIMIT = 10;
 const AI_CACHE_TTL_SECONDS = 60 * 60 * 24 * 14;
 const AI_MEMORY_CACHE = new Map();
+const RESOLVER_MEMORY_CACHE = createMemoryResolutionCache();
 const ROLE_FEATURES = {
   admin: ["dashboard", "temas", "cartas", "decks", "admin", "deck_ai", "card_search"],
   member: ["dashboard", "decks", "deck_ai"],
@@ -64,6 +65,46 @@ function normalizeApiRoute(pathname) {
   return String(pathname || "").replace(/^\/api\/?/, "").replace(/\/+$/, "") || "health";
 }
 
+async function resolveDeckRequest({ deckText, format = "casual", commander = null }, context = {}) {
+  const meta = {
+    scryfallCollectionCalls: 0,
+    scryfallFuzzyCalls: 0,
+    externalLookupUsed: false
+  };
+
+  const fetchFn = async (url, init = {}) => {
+    const target = String(url || "");
+    if (target.includes("/cards/collection")) {
+      meta.scryfallCollectionCalls += 1;
+      meta.externalLookupUsed = true;
+    } else if (target.includes("/cards/named")) {
+      meta.scryfallFuzzyCalls += 1;
+      meta.externalLookupUsed = true;
+    }
+
+    const headers = new Headers(init.headers || {});
+    for (const [key, value] of Object.entries(SCRYFALL_HEADERS)) {
+      if (!headers.has(key)) headers.set(key, value);
+    }
+    return fetch(url, { ...init, headers });
+  };
+
+  const resolvedDeck = await resolveCleanDeck(String(deckText || ""), {
+    cache: context.resolverCache || RESOLVER_MEMORY_CACHE,
+    fetchFn,
+    useFuzzy: context.useFuzzy
+  });
+
+  return {
+    ...resolvedDeck,
+    format,
+    commander,
+    meta: {
+      ...meta,
+      externalRequests: meta.scryfallCollectionCalls + meta.scryfallFuzzyCalls
+    }
+  };
+}
 
 async function health(env) {
   const payload = {

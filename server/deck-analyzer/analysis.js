@@ -3,7 +3,7 @@ import { findAiCandidateNames } from "./analysis-helpers.js";
 import { analyzeCardRoles } from "./card-role-analyzer.js";
 import { findCommanderProfile } from "./commander-profiles.js";
 import { buildCorvoStrategy, strategyToLegacyArchetype } from "./corvo-strategy-engine.js";
-import { enrichCardsWithCatalog, normalizeCardName, resolveCommanderCard } from "./catalog.js";
+import { normalizeCardName, normalizeCatalogCard, resolveCommanderCard } from "./catalog.js";
 import { buildCorvoReview } from "./corvo-review-engine.js";
 import { buildDiagnostics } from "./diagnostics.js";
 import { expectedTotalSize, formatLabel, normalizeFormat, validateFormatRules } from "./format-rules.js";
@@ -17,19 +17,27 @@ import { detectStrategySignals } from "./strategy-signal-detector.js";
 import { buildDeckStatistics } from "./statistics.js";
 import { buildTribalSummary } from "./tribal-analyzer.js";
 import { detectWincons } from "./wincon-detector.js";
+import { createMemoryResolutionCache, resolveDeck as resolveCleanDeck } from "../../src/deck-resolver/resolve-deck.ts";
+
+const ANALYSIS_RESOLVER_CACHE = createMemoryResolutionCache();
 
 export async function analyzeDeckRequest({ deckText, format = "casual", commander = null }, context = {}) {
   const includeTechnicalJson = Boolean(context.includeTechnicalJson);
   const normalizedFormat = normalizeFormat(format);
-  const resolvedDeck = context.resolvedDeck || null;
+  const resolvedDeck = context.resolvedDeck || await resolveCleanDeck(String(deckText || ""), {
+    cache: context.resolverCache || ANALYSIS_RESOLVER_CACHE,
+    fetchFn: context.fetchFn,
+    useFuzzy: context.useFuzzy
+  });
   const parsed = resolvedDeck?.parsedDeck || parseDeckText(deckText);
-  const rawDeckCards = resolvedDeck?.cards?.length ? normalizeResolvedDeckCards(resolvedDeck.cards) : [...parsed.mainboard];
+  const rawDeckCards = normalizeResolvedDeckCards([
+    ...(resolvedDeck?.cards || []),
+    ...(resolvedDeck?.unresolved || [])
+  ]);
   if (!rawDeckCards.length) return errorReport("DECKLIST_REQUIRED", "Cole uma decklist valida.", normalizedFormat, parsed);
 
   const selectedCommander = await resolveCommanderCard(commander, context.env, context.requestUrl);
-  const enrichedDeck = mergeCards(resolvedDeck?.cards?.length
-    ? rawDeckCards
-    : await enrichCardsWithCatalog(rawDeckCards, context.env, context.requestUrl, context.catalogOptions || {}));
+  const enrichedDeck = mergeCards(rawDeckCards);
   const statistics = buildDeckStatistics({ cards: enrichedDeck, parsedDeck: parsed, commander: selectedCommander, format: normalizedFormat });
   const commanderProfile = findCommanderProfile(selectedCommander);
   const tribalSummary = buildTribalSummary({ cards: enrichedDeck, commanderProfile });
@@ -64,7 +72,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   if (validation.blockingErrors.length) {
     return {
       status: "error",
-      analysisLevel: resolvedDeck ? "resolved_deck" : "local_catalog",
+      analysisLevel: "resolved_deck",
       format: normalizedFormat,
       errors: validation.blockingErrors,
       warnings: [...parsed.warnings, ...validation.warnings],
@@ -101,7 +109,7 @@ export async function analyzeDeckRequest({ deckText, format = "casual", commande
   const status = validation.warnings.length || statistics.unknownCards || resolvedDeck?.status === "partial" ? "partial" : "complete";
   const report = {
     status,
-    analysisLevel: resolvedDeck ? "resolved_deck" : "local_catalog",
+    analysisLevel: "resolved_deck",
     format: normalizedFormat,
     commander: selectedCommander,
     commanderProfile,
@@ -458,24 +466,86 @@ function buildAliasSuggestions(name, attempts = []) {
 }
 
 function normalizeResolvedDeckCards(cards = []) {
-  return (cards || []).map((card) => ({
-    ...card,
-    quantity: Number(card.quantity || 0),
-    inputName: card.inputName || card.name,
-    name: card.canonicalName || card.name || card.inputName,
-    displayName: card.displayName || card.canonicalName || card.name || card.inputName,
-    manaValue: card.manaValue ?? null,
-    typeLine: card.typeLine || null,
-    oracleText: card.oracleText || "",
-    cardTypes: Array.isArray(card.cardTypes) ? card.cardTypes : [],
-    subtypes: Array.isArray(card.subtypes) ? card.subtypes : [],
-    colors: Array.isArray(card.colors) ? card.colors : [],
-    colorIdentity: Array.isArray(card.colorIdentity) ? card.colorIdentity : [],
-    legalities: card.legalities || {},
-    tags: Array.isArray(card.tags) ? card.tags : ["needs_review"],
-    databaseStatus: card.databaseStatus || (card.canonicalName ? "found" : "unknown"),
-    resolutionDebug: card.resolutionDebug || null
-  }));
+  return (cards || []).map((card) => {
+    const quantity = Number(card.quantity || 0);
+    const inputName = card.inputName || card.name || "";
+    if (!card.canonicalName && !card.scryfallId) {
+      return {
+        ...card,
+        quantity,
+        inputName,
+        name: inputName,
+        displayName: inputName,
+        manaValue: null,
+        typeLine: null,
+        oracleText: "",
+        cardTypes: [],
+        subtypes: [],
+        colors: [],
+        colorIdentity: [],
+        legalities: {},
+        tags: ["needs_review"],
+        databaseStatus: "unknown",
+        resolutionDebug: card.resolutionDebug || {
+          attempts: card.attempts || [],
+          reason: card.reason || "not_found",
+          suggestions: card.suggestions || []
+        }
+      };
+    }
+
+    const raw = card.raw || {};
+    const imageUris = card.imageUris || raw.image_uris || raw.card_faces?.find?.((face) => face.image_uris)?.image_uris || null;
+    const normalized = normalizeCatalogCard({
+      id: card.scryfallId || raw.id || null,
+      oracleId: card.oracleId || raw.oracle_id || null,
+      name: card.canonicalName || raw.name || card.name || inputName,
+      manaValue: card.manaValue ?? raw.cmc ?? null,
+      typeLine: card.typeLine || raw.type_line || null,
+      oracleText: card.oracleText || raw.oracle_text || "",
+      cardTypes: card.cardTypes,
+      printedNames: raw.printed_name ? [raw.printed_name] : card.printedNames,
+      colors: Array.isArray(card.colors) ? card.colors : raw.colors || [],
+      colorIdentity: Array.isArray(card.colorIdentity) ? card.colorIdentity : raw.color_identity || [],
+      legalities: card.legalities || raw.legalities || {},
+      tags: card.tags || [],
+      power: card.power ?? raw.power ?? null,
+      toughness: card.toughness ?? raw.toughness ?? null,
+      imageUrl: card.imageUrl || imageUris?.normal || imageUris?.large || null,
+      thumbnailUrl: card.thumbnailUrl || imageUris?.small || null
+    });
+
+    return {
+      ...card,
+      quantity,
+      inputName,
+      name: normalized.canonicalName,
+      canonicalName: normalized.canonicalName,
+      displayName: card.displayName || normalized.displayName,
+      printedName: card.printedName || raw.printed_name || "",
+      manaValue: normalized.manaValue,
+      typeLine: normalized.typeLine,
+      oracleText: normalized.oracleText,
+      cardTypes: normalized.cardTypes,
+      subtypes: normalized.subtypes,
+      colors: normalized.colors,
+      colorIdentity: normalized.colorIdentity,
+      legalities: normalized.legalities,
+      tags: normalized.tags,
+      power: normalized.power,
+      toughness: normalized.toughness,
+      isLegendary: normalized.isLegendary,
+      canBeCommander: normalized.canBeCommander,
+      imageUrl: normalized.imageUrl,
+      thumbnailUrl: normalized.thumbnailUrl,
+      databaseStatus: card.databaseStatus || "found",
+      resolutionDebug: card.resolutionDebug || {
+        attempts: [card.resolvedBy, card.lookupName].filter(Boolean),
+        reason: null,
+        suggestions: []
+      }
+    };
+  });
 }
 
 function mergeCards(cards) {

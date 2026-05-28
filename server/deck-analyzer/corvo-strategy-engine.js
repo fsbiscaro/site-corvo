@@ -316,6 +316,7 @@ function scoreBurn(model, s) {
     score += 0.36;
     evidence.push(`${s.burn_count} efeitos de dano direto detectados.`);
   } else if (s.burn_count >= 4) score += 0.18;
+  if (s.direct_damage_count >= 12) score += 0.12;
   if (s.spell_density >= 0.35) score += 0.12;
   if (s.card_draw_count + s.card_selection_count < 5) missing.push("Burn precisa de gas para nao morrer no topo.");
   return result({ id: model.id, label: model.label, score, evidence, missing });

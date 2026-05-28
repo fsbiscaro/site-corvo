@@ -104,7 +104,7 @@ function scoreArchetypeModel({ model, signals, signalDetails, commander, command
     case "aristocrats_sacrifice":
       return scoreAristocrats(model, signals, commander, signalDetails);
     case "tribal":
-      return scoreTribal(model, signals, tribalSummary, commanderProfile);
+      return scoreTribal(model, signals, tribalSummary, commanderProfile, commander);
     case "combo":
       return scoreCombo(model, signals);
     case "control":
@@ -194,7 +194,7 @@ function scoreAristocrats(model, s, commander, signalDetails) {
   }
 }
 
-function scoreTribal(model, s, tribalSummary, commanderProfile) {
+function scoreTribal(model, s, tribalSummary, commanderProfile, commander) {
   let score = 0;
   const evidence = [];
   const missing = [];
@@ -206,6 +206,9 @@ function scoreTribal(model, s, tribalSummary, commanderProfile) {
   if (commanderProfile?.tribe === tribe) {
     score += 0.28;
     evidence.push(`O comandante recompensa ${tribe}.`);
+  } else if ((commander?.subtypes || []).includes(tribe)) {
+    score += 0.2;
+    evidence.push(`O comandante pertence a tribo ${tribe}.`);
   }
   if (s.tribal_density >= 0.65) {
     score += 0.22;
@@ -337,6 +340,7 @@ function scoreVoltron(model, s) {
   if (s.protection_count >= 3) score += 0.12;
   else missing.push("Protecao baixa para um plano que concentra recursos em uma criatura.");
   if (s.commander_voltron_signal) score += 0.14;
+  if (s.equipment_aura_count < 4 && !s.commander_voltron_signal) score = Math.min(score, 0.34);
   return result({ id: model.id, label: model.label, score, evidence, missing });
 }
 
@@ -483,7 +487,12 @@ function scoreBigMana(model, s, statistics) {
     score += 0.24;
     evidence.push(`${s.permanent_ramp_count} ramp permanente indica big mana.`);
   } else if (s.permanent_ramp_count >= 8) score += 0.12;
-  if (s.large_threat_count >= 5 || (statistics.averageManaValue || 0) >= 3.6) score += 0.16;
+  if (s.large_threat_count >= 8) {
+    score += 0.22;
+    evidence.push(`${s.large_threat_count} ameaças grandes sustentam o plano de Stompy.`);
+  } else if (s.large_threat_count >= 5 || (statistics.averageManaValue || 0) >= 3.6) score += 0.16;
+  if (s.ramp_count >= 10 && s.large_threat_count >= 8) score += 0.12;
+  if (s.creature_count >= 30 && s.large_threat_count >= 8) score += 0.08;
   if (s.commander_lifegain_signal && s.burst_mana_count >= 2) score += 0.08;
   return result({ id: model.id, label: model.label, score, evidence, missing: score < 0.35 ? ["Ramp ou payoff caro insuficiente para big mana."] : [] });
 }
